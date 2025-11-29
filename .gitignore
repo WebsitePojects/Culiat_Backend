@@ -1,2 +1,73 @@
-/.env.local
-/.env.production
+# Environment files (keep example files like .env.example in repository)
+.env
+.env.*
+!.env.example
+
+# Node modules
+node_modules/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+yarn-error.log*
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage and test results
+coverage/
+.nyc_output/
+test-results.xml
+jest-junit.xml
+
+# Build output
+dist/
+build/
+out/
+lib/
+*.tsbuildinfo
+
+# Node cache
+.cache/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE / Editor folders
+.vscode/
+.idea/
+
+# Yarn (when using plug'n'play or caches); keep lockfiles in repo
+.pnp.cjs
+.pnp.js
+.yarn/cache/
+.yarn/unplugged/
+.yarn/build-state.yml
+.yarn/install-state.gz
+.yarn/*.gz
+
+# Misc
+# note: keep lockfiles (package-lock.json/yarn.lock/pnpm-lock.yaml) tracked in repo
+npm-debug.log*
+
+# Ignore uploads (uncomment if you want to ignore user uploaded files)
+# NOTE: If you want to keep an empty directory in the repo, add a .gitkeep file and
+# uncomment the next two lines so the folder is tracked but its contents are ignored.
+uploads/**
+!uploads/.gitkeep
+
+# Secrets and keys (helpers)
+*.pem
+*.key
+*.crt
+
+# Optional: OS-specific Thumbs / Icon
+Icon
