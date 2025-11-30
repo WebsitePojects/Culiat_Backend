@@ -34,23 +34,31 @@ const settingsSchema = new mongoose.Schema(
     contactInfo: {
       officeAddress: {
         type: String,
-        default: "",
+        default: "467 Tandang Sora Ave, Quezon City, 1128 Metro Manila",
       },
       phoneNumber: {
         type: String,
-        default: "",
+        default: "+63 962-582-1531",
       },
       mobileNumber: {
         type: String,
-        default: "",
+        default: "856-722-60",
       },
       emailAddress: {
         type: String,
-        default: "",
+        default: "brgy.culiat@yahoo.com",
       },
       officeHours: {
         type: String,
         default: "Monday - Friday, 8:00 AM - 5:00 PM",
+      },
+      mapEmbedUrl: {
+        type: String,
+        default: "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d964.9469179112511!2d121.05602636955277!3d14.667987796511813!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3397b7475e1333fb%3A0xb01b3d6a168686a5!2sCuliat%20Barangay%20Hall!5e0!3m2!1sen!2sph!4v1760884990064!5m2!1sen!2sph",
+      },
+      mapDirectionsUrl: {
+        type: String,
+        default: "https://www.google.com/maps/place/Culiat+Barangay+Hall/@14.667987,121.05667,17z/data=!4m6!3m5!1s0x3397b7475e1333fb:0xb01b3d6a168686a5!8m2!3d14.6679865!4d121.0566701!16s%2Fg%2F11c3tsgbjt?hl=en&entry=ttu&g_ep=EgoyMDI1MTAyMC4wIKXMDSoASAFQAw%3D%3D",
       },
     },
 
@@ -58,7 +66,7 @@ const settingsSchema = new mongoose.Schema(
     socialMedia: {
       facebook: {
         type: String,
-        default: "",
+        default: "https://www.facebook.com/profile.php?id=100091344363854",
       },
       twitter: {
         type: String,
@@ -71,6 +79,46 @@ const settingsSchema = new mongoose.Schema(
       youtube: {
         type: String,
         default: "",
+      },
+    },
+
+    // Footer Settings
+    footer: {
+      aboutText: {
+        type: String,
+        default: "Serving our community with transparency, dedication, and excellence. Building a safer and unified Barangay Culiat for all residents.",
+      },
+      copyrightText: {
+        type: String,
+        default: "© 2025 Barangay Culiat | Managed by Barangay Culiat Information Office",
+      },
+      poweredByText: {
+        type: String,
+        default: "Prince IT Solutions",
+      },
+      showQuickLinks: {
+        type: Boolean,
+        default: true,
+      },
+      quickLinks: [
+        {
+          title: {
+            type: String,
+            default: "",
+          },
+          url: {
+            type: String,
+            default: "",
+          },
+          order: {
+            type: Number,
+            default: 0,
+          },
+        },
+      ],
+      showMap: {
+        type: Boolean,
+        default: true,
       },
     },
 
@@ -114,50 +162,6 @@ const settingsSchema = new mongoose.Schema(
       darkMode: {
         type: Boolean,
         default: false,
-      },
-    },
-
-    // Email Templates
-    emailTemplates: {
-      welcomeEmail: {
-        subject: {
-          type: String,
-          default: "Welcome to Barangay Culiat Portal",
-        },
-        body: {
-          type: String,
-          default: "Dear {userName},\n\nWelcome to the Barangay Culiat Portal! Your account has been created successfully.",
-        },
-      },
-      documentReady: {
-        subject: {
-          type: String,
-          default: "Your Document is Ready for Pickup",
-        },
-        body: {
-          type: String,
-          default: "Dear {userName},\n\nYour {documentType} is ready for pickup at the Barangay Hall.",
-        },
-      },
-      documentRejected: {
-        subject: {
-          type: String,
-          default: "Document Request Update",
-        },
-        body: {
-          type: String,
-          default: "Dear {userName},\n\nYour {documentType} request has been rejected. Reason: {reason}",
-        },
-      },
-      reportResolved: {
-        subject: {
-          type: String,
-          default: "Your Report Has Been Resolved",
-        },
-        body: {
-          type: String,
-          default: "Dear {userName},\n\nYour report '{reportTitle}' has been resolved.",
-        },
       },
     },
 

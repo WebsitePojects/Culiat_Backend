@@ -6,6 +6,7 @@ const {
   updateSiteInfo,
   updateContactInfo,
   updateSocialMedia,
+  updateFooter,
   updateTheme,
   resetSettings,
 } = require("../controllers/settingsController");
@@ -16,9 +17,25 @@ router.get("/", getSettings);
 
 // Protected routes - Admin only
 router.put("/", protect, authorize("Admin", "SuperAdmin"), updateSettings);
-router.put("/site-info", protect, authorize("Admin", "SuperAdmin"), updateSiteInfo);
-router.put("/contact-info", protect, authorize("Admin", "SuperAdmin"), updateContactInfo);
-router.put("/social-media", protect, authorize("Admin", "SuperAdmin"), updateSocialMedia);
+router.put(
+  "/site-info",
+  protect,
+  authorize("Admin", "SuperAdmin"),
+  updateSiteInfo
+);
+router.put(
+  "/contact-info",
+  protect,
+  authorize("Admin", "SuperAdmin"),
+  updateContactInfo
+);
+router.put(
+  "/social-media",
+  protect,
+  authorize("Admin", "SuperAdmin"),
+  updateSocialMedia
+);
+router.put("/footer", protect, authorize("Admin", "SuperAdmin"), updateFooter);
 router.put("/theme", protect, authorize("Admin", "SuperAdmin"), updateTheme);
 
 // SuperAdmin only

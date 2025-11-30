@@ -16,6 +16,7 @@ exports.getSettings = async (req, res) => {
           siteInfo: settings.siteInfo,
           contactInfo: settings.contactInfo,
           socialMedia: settings.socialMedia,
+          footer: settings.footer,
           theme: settings.theme,
           banner: {
             enabled: settings.banner.enabled,
@@ -54,9 +55,9 @@ exports.updateSettings = async (req, res) => {
       "siteInfo",
       "contactInfo",
       "socialMedia",
+      "footer",
       "banner",
       "theme",
-      "emailTemplates",
       "system",
       "termsAndConditions",
     ];
@@ -64,7 +65,10 @@ exports.updateSettings = async (req, res) => {
     updateFields.forEach((field) => {
       if (req.body[field]) {
         // Merge nested objects instead of replacing
-        if (typeof req.body[field] === "object" && !Array.isArray(req.body[field])) {
+        if (
+          typeof req.body[field] === "object" &&
+          !Array.isArray(req.body[field])
+        ) {
           settings[field] = {
             ...settings[field].toObject(),
             ...req.body[field],
@@ -80,15 +84,9 @@ exports.updateSettings = async (req, res) => {
     await settings.save();
 
     // Log the action
-    await logAction(
-      req.user._id,
-      "UPDATE_SETTINGS",
-      "Settings",
-      settings._id,
-      {
-        updatedFields: Object.keys(req.body),
-      }
-    );
+    await logAction(req.user._id, "UPDATE_SETTINGS", "Settings", settings._id, {
+      updatedFields: Object.keys(req.body),
+    });
 
     res.status(200).json({
       success: true,
@@ -111,12 +109,12 @@ exports.updateSettings = async (req, res) => {
 exports.updateSiteInfo = async (req, res) => {
   try {
     const settings = await Settings.getSettings();
-    
+
     settings.siteInfo = {
       ...settings.siteInfo.toObject(),
       ...req.body,
     };
-    
+
     settings.lastModifiedBy = req.user._id;
     await settings.save();
 
@@ -149,12 +147,12 @@ exports.updateSiteInfo = async (req, res) => {
 exports.updateContactInfo = async (req, res) => {
   try {
     const settings = await Settings.getSettings();
-    
+
     settings.contactInfo = {
       ...settings.contactInfo.toObject(),
       ...req.body,
     };
-    
+
     settings.lastModifiedBy = req.user._id;
     await settings.save();
 
@@ -187,12 +185,12 @@ exports.updateContactInfo = async (req, res) => {
 exports.updateSocialMedia = async (req, res) => {
   try {
     const settings = await Settings.getSettings();
-    
+
     settings.socialMedia = {
       ...settings.socialMedia.toObject(),
       ...req.body,
     };
-    
+
     settings.lastModifiedBy = req.user._id;
     await settings.save();
 
@@ -219,28 +217,58 @@ exports.updateSocialMedia = async (req, res) => {
   }
 };
 
+// @desc    Update footer settings
+// @route   PUT /api/settings/footer
+// @access  Private (Admin only)
+exports.updateFooter = async (req, res) => {
+  try {
+    const settings = await Settings.getSettings();
+
+    settings.footer = {
+      ...settings.footer.toObject(),
+      ...req.body,
+    };
+
+    settings.lastModifiedBy = req.user._id;
+    await settings.save();
+
+    await logAction(req.user._id, "UPDATE_FOOTER", "Settings", settings._id, {
+      footer: req.body,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Footer settings updated successfully",
+      data: settings.footer,
+    });
+  } catch (error) {
+    console.error("Error updating footer:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error updating footer settings",
+      error: error.message,
+    });
+  }
+};
+
 // @desc    Update theme settings
 // @route   PUT /api/settings/theme
 // @access  Private (Admin only)
 exports.updateTheme = async (req, res) => {
   try {
     const settings = await Settings.getSettings();
-    
+
     settings.theme = {
       ...settings.theme.toObject(),
       ...req.body,
     };
-    
+
     settings.lastModifiedBy = req.user._id;
     await settings.save();
 
-    await logAction(
-      req.user._id,
-      "UPDATE_THEME",
-      "Settings",
-      settings._id,
-      { theme: req.body }
-    );
+    await logAction(req.user._id, "UPDATE_THEME", "Settings", settings._id, {
+      theme: req.body,
+    });
 
     res.status(200).json({
       success: true,
@@ -264,19 +292,15 @@ exports.resetSettings = async (req, res) => {
   try {
     // Delete existing settings
     await Settings.deleteMany({});
-    
+
     // Create new default settings
     const settings = await Settings.create({
       lastModifiedBy: req.user._id,
     });
 
-    await logAction(
-      req.user._id,
-      "RESET_SETTINGS",
-      "Settings",
-      settings._id,
-      { message: "Settings reset to default" }
-    );
+    await logAction(req.user._id, "RESET_SETTINGS", "Settings", settings._id, {
+      message: "Settings reset to default",
+    });
 
     res.status(200).json({
       success: true,
