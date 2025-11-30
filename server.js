@@ -35,10 +35,11 @@ app.use(
 );
 app.use("/api/terms", require("./routes/termsRoute"));
 app.use("/api/analytics", require("./routes/analyticsRoute"));
-app.use("/api/notifications", require("./routes/notificationsRoute"));
+app.use("/api/notifications", require("./routes/notificationRoute"));
 app.use("/api/settings", require("./routes/settingsRoute"));
 app.use("/api/achievements", require("./routes/achievementsRoute"));
 app.use("/api/payments", require("./routes/paymentRoute"));
+app.use("/api/sectoral", require("./routes/sectoralRoute"));
 
 // New model routes
 app.use("/api/officials", require("./routes/officialsRoute"));

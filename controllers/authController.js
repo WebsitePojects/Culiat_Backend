@@ -1,15 +1,15 @@
-const jwt = require('jsonwebtoken');
-const crypto = require('crypto');
-const bcrypt = require('bcryptjs');
-const User = require('../models/User');
-const { LOGCONSTANTS } = require('../config/logConstants');
-const { getRoleName } = require('../utils/roleHelpers');
-const { logAction} = require('../utils/logHelper');
+const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
+const bcrypt = require("bcryptjs");
+const User = require("../models/User");
+const { LOGCONSTANTS } = require("../config/logConstants");
+const { getRoleName } = require("../utils/roleHelpers");
+const { logAction } = require("../utils/logHelper");
 
 // Generate JWT Token
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
-    expiresIn: '30d',
+    expiresIn: "30d",
   });
 };
 
@@ -18,10 +18,10 @@ const generateToken = (id) => {
 // @access  Public
 exports.register = async (req, res) => {
   try {
-    console.log('=== REGISTRATION REQUEST RECEIVED ===');
-    console.log('Request Body:', JSON.stringify(req.body, null, 2));
-    console.log('Request Files:', req.files);
-    
+    console.log("=== REGISTRATION REQUEST RECEIVED ===");
+    console.log("Request Body:", JSON.stringify(req.body, null, 2));
+    console.log("Request Files:", req.files);
+
     const {
       // Account credentials
       username,
@@ -51,33 +51,36 @@ exports.register = async (req, res) => {
       spouseInfo,
       // Emergency contact (nested object)
       emergencyContact,
+      // Birth Certificate fields
+      birthCertificate,
     } = req.body;
 
-    console.log('Extracted data:', {
+    console.log("Extracted data:", {
       username,
       email,
       firstName,
       lastName,
       address,
-      emergencyContact
+      emergencyContact,
+      birthCertificate,
     });
 
     // Check if user already exists
-    console.log('Checking if user exists...');
+    console.log("Checking if user exists...");
     const userExists = await User.findOne({ $or: [{ email }, { username }] });
     if (userExists) {
-      console.log('User already exists:', userExists.username);
+      console.log("User already exists:", userExists.username);
       return res.status(400).json({
         success: false,
-        message: 'User already exists with this email or username',
+        message: "User already exists with this email or username",
       });
     }
-    console.log('User does not exist, proceeding...');
+    console.log("User does not exist, proceeding...");
 
     // Handle validID file upload
     let validIDData = null;
     if (req.files && req.files.validID) {
-      console.log('Processing validID file...');
+      console.log("Processing validID file...");
       const validID = req.files.validID[0];
       validIDData = {
         url: `/uploads/validIDs/${validID.filename}`,
@@ -87,13 +90,26 @@ exports.register = async (req, res) => {
         fileSize: validID.size,
         uploadedAt: new Date(),
       };
-      console.log('ValidID data:', validIDData);
+      console.log("ValidID data:", validIDData);
     } else {
-      console.log('No validID file found in request');
+      console.log("No validID file found in request");
+    }
+
+    // Handle birth certificate document upload
+    let birthCertificateData = birthCertificate
+      ? JSON.parse(birthCertificate)
+      : {};
+    if (req.files && req.files.birthCertificateDoc) {
+      console.log("Processing birth certificate document...");
+      const birthCertDoc = req.files.birthCertificateDoc[0];
+      birthCertificateData.documentUrl = `/uploads/birthCertificates/${birthCertDoc.filename}`;
+      birthCertificateData.documentFilename = birthCertDoc.filename;
+      birthCertificateData.documentUploadedAt = new Date();
+      console.log("Birth certificate document data:", birthCertificateData);
     }
 
     // Create user with all fields
-    console.log('Creating user in database...');
+    console.log("Creating user in database...");
     const user = await User.create({
       username,
       email,
@@ -117,16 +133,18 @@ exports.register = async (req, res) => {
       address,
       spouseInfo,
       emergencyContact,
+      birthCertificate: birthCertificateData,
       validID: validIDData,
       role: 74934, // Resident role
-      registrationStatus: 'pending', // Pending admin approval
+      registrationStatus: "pending", // Pending admin approval
     });
 
-    console.log('User created successfully:', user._id);
+    console.log("User created successfully:", user._id);
 
     res.status(201).json({
       success: true,
-      message: 'Registration submitted successfully. Your account is pending admin approval.',
+      message:
+        "Registration submitted successfully. Your account is pending admin approval.",
       data: {
         _id: user._id,
         firstName: user.firstName,
@@ -135,23 +153,23 @@ exports.register = async (req, res) => {
         registrationStatus: user.registrationStatus,
       },
     });
-    
-    console.log('Creating audit log...');
+
+    console.log("Creating audit log...");
     // Create audit log for account creation
     await logAction(
       LOGCONSTANTS.actions.user.CREATE_USER,
       `New resident registration: ${user._id} (${user.email}) - Pending approval`,
       user
     );
-    console.log('Registration complete!');
+    console.log("Registration complete!");
   } catch (error) {
-    console.error('=== REGISTRATION ERROR ===');
-    console.error('Error message:', error.message);
-    console.error('Error stack:', error.stack);
-    console.error('Full error:', error);
+    console.error("=== REGISTRATION ERROR ===");
+    console.error("Error message:", error.message);
+    console.error("Error stack:", error.stack);
+    console.error("Full error:", error);
     res.status(500).json({
       success: false,
-      message: 'Error registering user',
+      message: "Error registering user",
       error: error.message,
     });
   }
@@ -168,32 +186,35 @@ exports.login = async (req, res) => {
     if (!username || !password) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide username and password',
+        message: "Please provide username and password",
       });
     }
 
     // Find user with password field
-    const user = await User.findOne({ username }).select('+password');
+    const user = await User.findOne({ username }).select("+password");
 
     if (!user || !user.isActive) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid credentials',
+        message: "Invalid credentials",
       });
     }
 
     // Check if resident registration is approved
-    if (user.role === 74934 && user.registrationStatus === 'pending') {
+    if (user.role === 74934 && user.registrationStatus === "pending") {
       return res.status(403).json({
         success: false,
-        message: 'Your registration is pending admin approval. Please wait for approval before logging in.',
+        message:
+          "Your registration is pending admin approval. Please wait for approval before logging in.",
       });
     }
 
-    if (user.role === 74934 && user.registrationStatus === 'rejected') {
+    if (user.role === 74934 && user.registrationStatus === "rejected") {
       return res.status(403).json({
         success: false,
-        message: `Your registration was rejected. Reason: ${user.rejectionReason || 'Please contact admin for more information.'}`,
+        message: `Your registration was rejected. Reason: ${
+          user.rejectionReason || "Please contact admin for more information."
+        }`,
       });
     }
 
@@ -202,7 +223,7 @@ exports.login = async (req, res) => {
     if (!isMatch) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid credentials',
+        message: "Invalid credentials",
       });
     }
 
@@ -211,7 +232,7 @@ exports.login = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Login successful',
+      message: "Login successful",
       data: {
         _id: user._id,
         username: user.username,
@@ -226,7 +247,7 @@ exports.login = async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Error logging in',
+      message: "Error logging in",
       error: error.message,
     });
   }
@@ -254,6 +275,7 @@ exports.getMe = async (req, res) => {
         address: user.address,
         phoneNumber: user.phoneNumber,
         dateOfBirth: user.dateOfBirth,
+        age: user.age, // Virtual field
         placeOfBirth: user.placeOfBirth,
         gender: user.gender,
         civilStatus: user.civilStatus,
@@ -267,6 +289,7 @@ exports.getMe = async (req, res) => {
         occupation: user.occupation,
         spouseInfo: user.spouseInfo,
         emergencyContact: user.emergencyContact,
+        birthCertificate: user.birthCertificate,
         isActive: user.isActive,
         createdAt: user.createdAt,
       },
@@ -274,7 +297,7 @@ exports.getMe = async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Error fetching user data',
+      message: "Error fetching user data",
       error: error.message,
     });
   }
@@ -285,7 +308,7 @@ exports.getMe = async (req, res) => {
 // @access  Private
 exports.updateProfile = async (req, res) => {
   try {
-    const { username,firstName, lastName, address, phoneNumber } = req.body;
+    const { username, firstName, lastName, address, phoneNumber } = req.body;
 
     const user = await User.findById(req.user._id);
     if (username) user.username = username;
@@ -298,13 +321,13 @@ exports.updateProfile = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Profile updated successfully',
+      message: "Profile updated successfully",
       data: user,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Error updating profile',
+      message: "Error updating profile",
       error: error.message,
     });
   }
@@ -321,19 +344,19 @@ exports.changePassword = async (req, res) => {
     if (!currentPassword || !newPassword) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide current and new password',
+        message: "Please provide current and new password",
       });
     }
 
     // Get user with password
-    const user = await User.findById(req.user._id).select('+password');
+    const user = await User.findById(req.user._id).select("+password");
 
     // Check current password
     const isMatch = await user.comparePassword(currentPassword);
     if (!isMatch) {
       return res.status(401).json({
         success: false,
-        message: 'Current password is incorrect',
+        message: "Current password is incorrect",
       });
     }
 
@@ -343,12 +366,12 @@ exports.changePassword = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Password changed successfully',
+      message: "Password changed successfully",
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Error changing password',
+      message: "Error changing password",
       error: error.message,
     });
   }
@@ -356,14 +379,23 @@ exports.changePassword = async (req, res) => {
 
 exports.adminRegister = async (req, res) => {
   try {
-    const { username, firstName, lastName, email, password, role, address, phoneNumber } = req.body;
+    const {
+      username,
+      firstName,
+      lastName,
+      email,
+      password,
+      role,
+      address,
+      phoneNumber,
+    } = req.body;
 
     // Check if user already exists
     const userExists = await User.findOne({ username });
     if (userExists) {
       return res.status(400).json({
         success: false,
-        message: 'User already exists with this username',
+        message: "User already exists with this username",
       });
     }
 
@@ -384,7 +416,7 @@ exports.adminRegister = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'New Super Admin/Admin registered successfully',
+      message: "New Super Admin/Admin registered successfully",
       data: {
         _id: user._id,
         username: user.username,
@@ -395,19 +427,21 @@ exports.adminRegister = async (req, res) => {
         token,
       },
     });
-    
+
     // Create audit log for admin-created account
     // Use req.user (admin creating account), otherwise use the new user
     const performer = req.user || user;
     await logAction(
       LOGCONSTANTS.actions.user.CREATE_USER,
-      `Admin registration: ${user._id} (${user.email}) by ${req.user?._id || 'system'}`,
+      `Admin registration: ${user._id} (${user.email}) by ${
+        req.user?._id || "system"
+      }`,
       performer
     );
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Error registering user',
+      message: "Error registering user",
       error: error.message,
     });
   }
@@ -418,14 +452,22 @@ exports.adminRegister = async (req, res) => {
 // @access  Public
 exports.residentRegister = async (req, res) => {
   try {
-    const { firstName, lastName, username, email, password, address, phoneNumber } = req.body;
+    const {
+      firstName,
+      lastName,
+      username,
+      email,
+      password,
+      address,
+      phoneNumber,
+    } = req.body;
 
     // Check if user already exists
     const userExists = await User.findOne({ $or: [{ email }, { username }] });
     if (userExists) {
       return res.status(400).json({
         success: false,
-        message: 'User already exists with this email or username',
+        message: "User already exists with this email or username",
       });
     }
 
@@ -433,7 +475,7 @@ exports.residentRegister = async (req, res) => {
     if (!req.file) {
       return res.status(400).json({
         success: false,
-        message: 'Proof of residency image is required',
+        message: "Proof of residency image is required",
       });
     }
 
@@ -447,13 +489,14 @@ exports.residentRegister = async (req, res) => {
       address,
       phoneNumber,
       role: 74934, // Resident
-      registrationStatus: 'pending',
+      registrationStatus: "pending",
       proofOfResidency: req.file.path || req.file.filename,
     });
 
     res.status(201).json({
       success: true,
-      message: 'Registration submitted successfully. Please wait for admin approval.',
+      message:
+        "Registration submitted successfully. Please wait for admin approval.",
       data: {
         _id: user._id,
         username: user.username,
@@ -473,7 +516,7 @@ exports.residentRegister = async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Error registering resident',
+      message: "Error registering resident",
       error: error.message,
     });
   }
@@ -485,9 +528,11 @@ exports.residentRegister = async (req, res) => {
 exports.getPendingRegistrations = async (req, res) => {
   try {
     const pendingUsers = await User.find({
-      registrationStatus: 'pending',
-      role: 74934
-    }).select('-password').sort({ createdAt: -1 });
+      registrationStatus: "pending",
+      role: 74934,
+    })
+      .select("-password")
+      .sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,
@@ -497,7 +542,7 @@ exports.getPendingRegistrations = async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Error fetching pending registrations',
+      message: "Error fetching pending registrations",
       error: error.message,
     });
   }
@@ -513,18 +558,18 @@ exports.approveRegistration = async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found',
+        message: "User not found",
       });
     }
 
-    if (user.registrationStatus !== 'pending') {
+    if (user.registrationStatus !== "pending") {
       return res.status(400).json({
         success: false,
-        message: 'User registration is not pending',
+        message: "User registration is not pending",
       });
     }
 
-    user.registrationStatus = 'approved';
+    user.registrationStatus = "approved";
     user.isActive = true;
     user.approvedBy = req.user._id;
     user.approvedAt = Date.now();
@@ -532,7 +577,7 @@ exports.approveRegistration = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Registration approved successfully',
+      message: "Registration approved successfully",
       data: {
         _id: user._id,
         username: user.username,
@@ -550,7 +595,7 @@ exports.approveRegistration = async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Error approving registration',
+      message: "Error approving registration",
       error: error.message,
     });
   }
@@ -567,25 +612,25 @@ exports.rejectRegistration = async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found',
+        message: "User not found",
       });
     }
 
-    if (user.registrationStatus !== 'pending') {
+    if (user.registrationStatus !== "pending") {
       return res.status(400).json({
         success: false,
-        message: 'User registration is not pending',
+        message: "User registration is not pending",
       });
     }
 
-    user.registrationStatus = 'rejected';
-    user.rejectionReason = reason || 'Registration rejected by admin';
+    user.registrationStatus = "rejected";
+    user.rejectionReason = reason || "Registration rejected by admin";
     user.isActive = false;
     await user.save();
 
     res.status(200).json({
       success: true,
-      message: 'Registration rejected successfully',
+      message: "Registration rejected successfully",
       data: {
         _id: user._id,
         username: user.username,
@@ -604,7 +649,7 @@ exports.rejectRegistration = async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Error rejecting registration',
+      message: "Error rejecting registration",
       error: error.message,
     });
   }
@@ -617,25 +662,26 @@ exports.getAllUsers = async (req, res) => {
   try {
     const { role, status } = req.query;
     const filter = {};
-    
+
     // Filter by role if specified
     if (role) {
       filter.role = role;
     }
-    
+
     // Filter by registration status if specified
     if (status) {
       filter.registrationStatus = status;
     }
 
     const users = await User.find(filter)
-      .select('-password')
+      .select("-password")
       .sort({ createdAt: -1 });
 
-    // Add role name to each user for frontend display
-    const usersWithRoleNames = users.map(user => {
+    // Add role name and age to each user for frontend display
+    const usersWithRoleNames = users.map((user) => {
       const userObj = user.toObject();
       userObj.roleName = getRoleName(user.role);
+      userObj.age = user.age; // Virtual field
       return userObj;
     });
 
@@ -647,7 +693,7 @@ exports.getAllUsers = async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Error fetching users',
+      message: "Error fetching users",
       error: error.message,
     });
   }
@@ -663,17 +709,19 @@ exports.forgotPassword = async (req, res) => {
     const user = await User.findOne({ email });
 
     if (!user) {
-      return res.status(404).json({ success: false, message: 'Email could not be sent' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Email could not be sent" });
     }
 
     // Generate Reset Token
-    const resetToken = crypto.randomBytes(20).toString('hex');
+    const resetToken = crypto.randomBytes(20).toString("hex");
 
     // Hash token (private key) and save to database
     user.resetPasswordToken = crypto
-      .createHash('sha256')
+      .createHash("sha256")
       .update(resetToken)
-      .digest('hex');
+      .digest("hex");
 
     // Set expire (10 minutes)
     user.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
@@ -696,18 +744,22 @@ exports.forgotPassword = async (req, res) => {
       //   subject: 'Password Reset Request',
       //   text: message,
       // });
-      
+
       // Since we don't have an email service set up, we'll just return the token for testing
       console.log(`Reset Token for ${user.email}: ${resetToken}`);
 
-      res.status(200).json({ success: true, data: 'Email Sent', testToken: resetToken });
+      res
+        .status(200)
+        .json({ success: true, data: "Email Sent", testToken: resetToken });
     } catch (error) {
       user.resetPasswordToken = undefined;
       user.resetPasswordExpire = undefined;
 
       await user.save();
 
-      return res.status(500).json({ success: false, message: 'Email could not be sent' });
+      return res
+        .status(500)
+        .json({ success: false, message: "Email could not be sent" });
     }
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -720,9 +772,9 @@ exports.forgotPassword = async (req, res) => {
 exports.resetPassword = async (req, res) => {
   // Get hashed token
   const resetPasswordToken = crypto
-    .createHash('sha256')
+    .createHash("sha256")
     .update(req.params.resetToken)
-    .digest('hex');
+    .digest("hex");
 
   try {
     const user = await User.findOne({
@@ -731,13 +783,13 @@ exports.resetPassword = async (req, res) => {
     });
 
     if (!user) {
-      return res.status(400).json({ success: false, message: 'Invalid Token' });
+      return res.status(400).json({ success: false, message: "Invalid Token" });
     }
 
     // Set new password
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(req.body.password, salt);
-    
+
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
 
@@ -745,7 +797,7 @@ exports.resetPassword = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      data: 'Password Reset Success',
+      data: "Password Reset Success",
       token: generateToken(user._id),
     });
   } catch (error) {
