@@ -47,6 +47,10 @@ app.use("/api/barangay-info", require("./routes/barangayInfoRoute"));
 app.use("/api/services", require("./routes/servicesRoute"));
 app.use("/api/faqs", require("./routes/faqsRoute"));
 
+// Document generation routes
+app.use("/api/documents", require("./routes/documentRoutes"));
+
+
 // Health check route
 app.get("/api/health", (req, res) => {
   res.status(200).json({
