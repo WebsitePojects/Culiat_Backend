@@ -25,10 +25,13 @@ Use `{placeholder_name}` syntax in your DOCX templates. The system will replace 
 
 | Placeholder | Description | Example |
 |-------------|-------------|---------|
-| `{full_address}` | House No., Street, Subdivision | "123 Main St., Green Village" |
+| `{full_address}` | Complete address with barangay and city | "123 MAIN ST., GREEN VILLAGE, BARANGAY CULIAT, QUEZON CITY" |
 | `{house_number}` | House/Building number | "123" |
-| `{street}` | Street name | "Main Street" |
-| `{subdivision}` | Subdivision/Barangay | "Green Village" |
+| `{street}` | Street name | "MAIN STREET" |
+| `{subdivision}` | Subdivision/Barangay | "GREEN VILLAGE" |
+| `{barangay}` | Barangay name | "CULIAT" |
+| `{city}` | City name | "QUEZON CITY" |
+
 
 ### Demographics
 

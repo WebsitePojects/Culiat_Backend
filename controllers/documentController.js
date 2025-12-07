@@ -107,38 +107,54 @@ const formatCivilStatus = (status) => {
   if (!status) return '';
   return status
     .replace(/_/g, ' ')
-    .replace(/\b\w/g, l => l.toUpperCase());
+    .toUpperCase();
 };
 
 /**
- * Format gender for display
+ * Format gender for display - UPPERCASE
  */
 const formatGender = (gender) => {
   if (!gender) return '';
-  return gender.charAt(0).toUpperCase() + gender.slice(1).toLowerCase();
+  return gender.toUpperCase();
 };
 
 /**
- * Build full name from parts
+ * Build full name from parts - UPPERCASE
  */
 const buildFullName = (firstName, middleName, lastName, suffix) => {
   const parts = [firstName, middleName, lastName].filter(Boolean);
   if (suffix) parts.push(suffix);
-  return parts.join(' ');
+  return parts.join(' ').toUpperCase();
 };
 
 /**
- * Build full address from address object
+ * Convert string to Title Case (Pascal Case)
+ */
+const toTitleCase = (str) => {
+  if (!str) return '';
+  return str
+    .toLowerCase()
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+};
+
+/**
+ * Build full address from address object - Title Case
+ * Includes house number, street, subdivision, barangay, and city
  */
 const buildFullAddress = (address) => {
   if (!address) return '';
   const parts = [
     address.houseNumber,
     address.street,
-    address.subdivision
+    address.subdivision,
+    address.barangay ? `Barangay ${address.barangay}` : 'Barangay Culiat',
+    address.city || 'Quezon City'
   ].filter(Boolean);
-  return parts.join(', ');
+  return toTitleCase(parts.join(', '));
 };
+
 
 // ============================================================================
 // CONTROLLER METHODS
@@ -207,49 +223,54 @@ exports.generateDocumentFile = async (req, res) => {
     }
 
     // Build template data with standard placeholders
+    // All dynamic data is UPPERCASE for official documents
     const templateData = {
-      // Salutation
+      // Salutation (proper case, not uppercase)
       salutation: getSalutation(documentRequest.gender, documentRequest.civilStatus),
       
-      // Personal info
+      // Personal info - UPPERCASE
       full_name: buildFullName(
         documentRequest.firstName,
         documentRequest.middleName,
         documentRequest.lastName,
         documentRequest.suffix
       ),
-      first_name: documentRequest.firstName || '',
-      middle_name: documentRequest.middleName || '',
-      last_name: documentRequest.lastName || '',
-      suffix: documentRequest.suffix || '',
+      first_name: (documentRequest.firstName || '').toUpperCase(),
+      middle_name: (documentRequest.middleName || '').toUpperCase(),
+      last_name: (documentRequest.lastName || '').toUpperCase(),
+      suffix: (documentRequest.suffix || '').toUpperCase(),
       
-      // Address
+      // Address - Title Case
       full_address: buildFullAddress(documentRequest.address),
-      house_number: documentRequest.address?.houseNumber || '',
-      street: documentRequest.address?.street || '',
-      subdivision: documentRequest.address?.subdivision || '',
+      house_number: toTitleCase(documentRequest.address?.houseNumber || ''),
+      street: toTitleCase(documentRequest.address?.street || ''),
+      subdivision: toTitleCase(documentRequest.address?.subdivision || ''),
+      barangay: toTitleCase(documentRequest.address?.barangay || 'Culiat'),
+      city: toTitleCase(documentRequest.address?.city || 'Quezon City'),
+
       
-      // Demographics
+      // Demographics - UPPERCASE
       date_of_birth: documentRequest.dateOfBirth 
         ? formatOfficialDate(documentRequest.dateOfBirth) 
         : '',
       age: calculateAge(documentRequest.dateOfBirth),
       gender: formatGender(documentRequest.gender),
       civil_status: formatCivilStatus(documentRequest.civilStatus),
-      nationality: documentRequest.nationality || 'Filipino',
+      nationality: (documentRequest.nationality || 'Filipino').toUpperCase(),
       contact_number: documentRequest.contactNumber || '',
       
-      // Request info
-      purpose_of_request: documentRequest.purposeOfRequest || '',
+      // Request info - UPPERCASE
+      purpose_of_request: (documentRequest.purposeOfRequest || '').toUpperCase(),
       
       // Document metadata
       issue_date: formatOfficialDate(new Date()),
       control_number: generateControlNumber(documentRequest.documentType),
       
-      // Barangay officials
-      barangay_captain: barangayCaptain,
-      barangay_secretary: barangaySecretary,
+      // Barangay officials - UPPERCASE
+      barangay_captain: barangayCaptain.toUpperCase(),
+      barangay_secretary: barangaySecretary.toUpperCase(),
     };
+
 
     // Generate document
     const docBuffer = await generateDocument(templatePath, templateData);
