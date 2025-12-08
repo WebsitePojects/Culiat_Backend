@@ -157,6 +157,34 @@ const buildFullAddress = (address) => {
   return toTitleCase(parts.join(' '));
 };
 
+/**
+ * Build business address from businessAddress object - Title Case
+ */
+const buildBusinessAddress = (businessAddress) => {
+  if (!businessAddress) return '';
+  const parts = [
+    businessAddress.houseNumber,
+    businessAddress.street
+  ].filter(Boolean);
+  return toTitleCase(parts.join(' '));
+};
+
+/**
+ * Build emergency contact full address
+ */
+const buildEmergencyContactAddress = (emergencyContact) => {
+  if (!emergencyContact || !emergencyContact.address) return '';
+  const addr = emergencyContact.address;
+  const parts = [
+    addr.houseNumber,
+    addr.street,
+    addr.subdivision,
+    addr.barangay ? `Barangay ${addr.barangay}` : null,
+    addr.city
+  ].filter(Boolean);
+  return toTitleCase(parts.join(', '));
+};
+
 // Fixed location constants for Barangay Culiat
 const BARANGAY = 'Culiat';
 const CITY = 'Quezon City';
@@ -228,13 +256,11 @@ exports.generateDocumentFile = async (req, res) => {
       console.log('Using default officials names');
     }
 
-    // Build template data with standard placeholders
+    // Build template data with ALL available placeholders
     // All dynamic data is UPPERCASE for official documents
     const templateData = {
-      // Salutation (proper case, not uppercase) - uses explicit or derived
+      // ========== PERSONAL INFORMATION ==========
       salutation: getSalutation(documentRequest),
-      
-      // Personal info - UPPERCASE
       full_name: buildFullName(
         documentRequest.firstName,
         documentRequest.middleName,
@@ -246,17 +272,15 @@ exports.generateDocumentFile = async (req, res) => {
       last_name: (documentRequest.lastName || '').toUpperCase(),
       suffix: (documentRequest.suffix || '').toUpperCase(),
       
-      // Address - Title Case (house + street only, barangay/city are fixed)
+      // ========== ADDRESS INFORMATION ==========
       full_address: buildFullAddress(documentRequest.address),
       house_number: toTitleCase(documentRequest.address?.houseNumber || ''),
       street: toTitleCase(documentRequest.address?.street || ''),
       subdivision: toTitleCase(documentRequest.address?.subdivision || ''),
       barangay: BARANGAY,
       city: CITY,
-
-
       
-      // Demographics - UPPERCASE
+      // ========== DEMOGRAPHICS ==========
       date_of_birth: documentRequest.dateOfBirth 
         ? formatOfficialDate(documentRequest.dateOfBirth) 
         : '',
@@ -265,17 +289,62 @@ exports.generateDocumentFile = async (req, res) => {
       civil_status: formatCivilStatus(documentRequest.civilStatus),
       nationality: (documentRequest.nationality || 'Filipino').toUpperCase(),
       contact_number: documentRequest.contactNumber || '',
+      place_of_birth: (documentRequest.placeOfBirth || '').toUpperCase(),
       
-      // Request info - UPPERCASE
+      // ========== ADDITIONAL PERSONAL FIELDS ==========
+      tin_number: documentRequest.tinNumber || '',
+      sss_gsis_number: documentRequest.sssGsisNumber || '',
+      precinct_number: documentRequest.precinctNumber || '',
+      religion: (documentRequest.religion || '').toUpperCase(),
+      height_weight: documentRequest.heightWeight || '',
+      color_of_hair_eyes: documentRequest.colorOfHairEyes || '',
+      occupation: (documentRequest.occupation || '').toUpperCase(),
+      email_address: documentRequest.emailAddress || '',
+      request_for: (documentRequest.requestFor || '').toUpperCase(),
+      
+      // ========== SPOUSE INFORMATION ==========
+      spouse_name: (documentRequest.spouseInfo?.name || '').toUpperCase(),
+      spouse_occupation: (documentRequest.spouseInfo?.occupation || '').toUpperCase(),
+      spouse_contact_number: documentRequest.spouseInfo?.contactNumber || '',
+      
+      // ========== EMERGENCY CONTACT ==========
+      emergency_contact_name: (documentRequest.emergencyContact?.fullName || '').toUpperCase(),
+      emergency_contact_relationship: (documentRequest.emergencyContact?.relationship || '').toUpperCase(),
+      emergency_contact_number: documentRequest.emergencyContact?.contactNumber || '',
+      emergency_contact_address: buildEmergencyContactAddress(documentRequest.emergencyContact),
+      
+      // ========== REQUEST INFORMATION ==========
       purpose_of_request: (documentRequest.purposeOfRequest || '').toUpperCase(),
+      remarks: documentRequest.remarks || '',
+      preferred_pickup_date: documentRequest.preferredPickupDate 
+        ? formatOfficialDate(documentRequest.preferredPickupDate) 
+        : '',
       
-      // Document metadata
+      // ========== DOCUMENT METADATA ==========
       issue_date: formatOfficialDate(new Date()),
       control_number: generateControlNumber(documentRequest.documentType),
       
-      // Barangay officials - UPPERCASE
+      // ========== BARANGAY OFFICIALS ==========
       barangay_captain: barangayCaptain.toUpperCase(),
       barangay_secretary: barangaySecretary.toUpperCase(),
+      
+      // ========== BUSINESS INFORMATION (for business_permit, business_clearance) ==========
+      business_name: (documentRequest.businessInfo?.businessName || '').toUpperCase(),
+      nature_of_business: (documentRequest.businessInfo?.natureOfBusiness || '').toUpperCase(),
+      application_type: (documentRequest.businessInfo?.applicationType || '').toUpperCase(),
+      
+      // Business Address
+      business_full_address: buildBusinessAddress(documentRequest.businessInfo?.businessAddress),
+      business_house_number: toTitleCase(documentRequest.businessInfo?.businessAddress?.houseNumber || ''),
+      business_street: toTitleCase(documentRequest.businessInfo?.businessAddress?.street || ''),
+      business_subdivision: toTitleCase(documentRequest.businessInfo?.businessAddress?.subdivision || ''),
+      business_barangay: BARANGAY,
+      business_city: CITY,
+      
+      // Owner/Representative
+      owner_representative: (documentRequest.businessInfo?.ownerRepresentative || '').toUpperCase(),
+      owner_contact_number: documentRequest.businessInfo?.ownerContactNumber || '',
+      representative_contact_number: documentRequest.businessInfo?.representativeContactNumber || '',
     };
 
 
