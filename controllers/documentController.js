@@ -64,15 +64,20 @@ const formatOfficialDate = (date) => {
 };
 
 /**
- * Get salutation based on gender and civil status
+ * Determine salutation - use explicit if provided, otherwise derive from gender/civilStatus
  */
-const getSalutation = (gender, civilStatus) => {
+const getSalutation = (requestData) => {
+  // Use explicit salutation if provided by user
+  if (requestData.salutation) return requestData.salutation;
+  
+  // Fall back to derived salutation from gender and civil status
+  const { gender, civilStatus } = requestData;
   if (gender?.toLowerCase() === 'male') return 'Mr.';
   if (gender?.toLowerCase() === 'female') {
     if (civilStatus?.toLowerCase() === 'married') return 'Mrs.';
     return 'Ms.';
   }
-  return ''; // Default empty if unknown
+  return '';
 };
 
 /**
@@ -140,20 +145,21 @@ const toTitleCase = (str) => {
 };
 
 /**
- * Build full address from address object - Title Case
- * Includes house number, street, subdivision, barangay, and city
+ * Build user address from address object - Title Case
+ * Only includes house number and street (barangay/city are fixed)
  */
 const buildFullAddress = (address) => {
   if (!address) return '';
   const parts = [
     address.houseNumber,
-    address.street,
-    address.subdivision,
-    address.barangay ? `Barangay ${address.barangay}` : 'Barangay Culiat',
-    address.city || 'Quezon City'
+    address.street
   ].filter(Boolean);
-  return toTitleCase(parts.join(', '));
+  return toTitleCase(parts.join(' '));
 };
+
+// Fixed location constants for Barangay Culiat
+const BARANGAY = 'Culiat';
+const CITY = 'Quezon City';
 
 
 // ============================================================================
@@ -225,8 +231,8 @@ exports.generateDocumentFile = async (req, res) => {
     // Build template data with standard placeholders
     // All dynamic data is UPPERCASE for official documents
     const templateData = {
-      // Salutation (proper case, not uppercase)
-      salutation: getSalutation(documentRequest.gender, documentRequest.civilStatus),
+      // Salutation (proper case, not uppercase) - uses explicit or derived
+      salutation: getSalutation(documentRequest),
       
       // Personal info - UPPERCASE
       full_name: buildFullName(
@@ -240,13 +246,14 @@ exports.generateDocumentFile = async (req, res) => {
       last_name: (documentRequest.lastName || '').toUpperCase(),
       suffix: (documentRequest.suffix || '').toUpperCase(),
       
-      // Address - Title Case
+      // Address - Title Case (house + street only, barangay/city are fixed)
       full_address: buildFullAddress(documentRequest.address),
       house_number: toTitleCase(documentRequest.address?.houseNumber || ''),
       street: toTitleCase(documentRequest.address?.street || ''),
       subdivision: toTitleCase(documentRequest.address?.subdivision || ''),
-      barangay: toTitleCase(documentRequest.address?.barangay || 'Culiat'),
-      city: toTitleCase(documentRequest.address?.city || 'Quezon City'),
+      barangay: BARANGAY,
+      city: CITY,
+
 
       
       // Demographics - UPPERCASE

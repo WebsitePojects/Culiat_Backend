@@ -48,6 +48,7 @@ exports.createDocumentRequest = async (req, res) => {
       lastName: payload.lastName,
       firstName: payload.firstName,
       middleName: payload.middleName,
+      salutation: payload.salutation,
       dateOfBirth: payload.dateOfBirth,
       placeOfBirth: payload.placeOfBirth,
       gender: payload.gender?.toLowerCase(),

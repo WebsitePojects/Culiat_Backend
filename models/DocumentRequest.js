@@ -81,6 +81,11 @@ const documentRequestSchema = new mongoose.Schema(
     lastName: { type: String, required: true, trim: true },
     firstName: { type: String, required: true, trim: true },
     middleName: { type: String, trim: true },
+    salutation: {
+      type: String,
+      enum: ['', 'Mr.', 'Mrs.', 'Ms.'],
+      default: '',
+    },
     dateOfBirth: { type: Date },
     placeOfBirth: { type: String, trim: true },
     gender: { type: String, enum: ["male", "female", "other", "unspecified"] },

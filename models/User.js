@@ -13,6 +13,11 @@ const userSchema = new mongoose.Schema(
       required: [true, "Last name is required"],
       trim: true,
     },
+    salutation: {
+      type: String,
+      enum: ['', 'Mr.', 'Mrs.', 'Ms.'],
+      default: '',
+    },
     username: {
       type: String,
       required: [true, "Username is required"],
