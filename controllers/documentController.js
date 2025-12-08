@@ -260,7 +260,7 @@ exports.generateDocumentFile = async (req, res) => {
     // All dynamic data is UPPERCASE for official documents
     const templateData = {
       // ========== PERSONAL INFORMATION ==========
-      salutation: getSalutation(documentRequest),
+      salutation: getSalutation(documentRequest).toUpperCase(),
       full_name: buildFullName(
         documentRequest.firstName,
         documentRequest.middleName,
