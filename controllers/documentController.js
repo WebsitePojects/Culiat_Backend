@@ -345,6 +345,14 @@ exports.generateDocumentFile = async (req, res) => {
       owner_representative: (documentRequest.businessInfo?.ownerRepresentative || '').toUpperCase(),
       owner_contact_number: documentRequest.businessInfo?.ownerContactNumber || '',
       representative_contact_number: documentRequest.businessInfo?.representativeContactNumber || '',
+      
+      // ========== BENEFICIARY INFORMATION (for rehab certificate) ==========
+      beneficiary_name: (documentRequest.beneficiaryInfo?.fullName || '').toUpperCase(),
+      beneficiary_age: documentRequest.beneficiaryInfo?.age?.toString() || '',
+      beneficiary_date_of_birth: documentRequest.beneficiaryInfo?.dateOfBirth 
+        ? formatOfficialDate(documentRequest.beneficiaryInfo.dateOfBirth) 
+        : '',
+      beneficiary_relationship: (documentRequest.beneficiaryInfo?.relationship || '').toUpperCase(),
     };
 
 

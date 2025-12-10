@@ -172,7 +172,32 @@ Same as **Barangay Clearance** placeholders.
 
 ### 🏥 Rehabilitation Certificate (`rehab`)
 
-Same as **Barangay Clearance** placeholders.
+**Requestor Information:**
+| Placeholder | Description | Format |
+|-------------|-------------|--------|
+| `{salutation}` | Mr., Mrs., Ms. | Proper Case |
+| `{full_name}` | Requestor's complete name | UPPERCASE |
+| `{full_address}` | House + street | Title Case |
+| `{barangay}` | Fixed: "Culiat" | - |
+| `{city}` | Fixed: "Quezon City" | - |
+| `{nationality}` | Default: Filipino | UPPERCASE |
+
+**Beneficiary Information (person requesting rehabilitation):**
+| Placeholder | Description | Format |
+|-------------|-------------|--------|
+| `{beneficiary_name}` | Beneficiary's complete name | UPPERCASE |
+| `{beneficiary_age}` | Beneficiary's age | Number |
+| `{beneficiary_date_of_birth}` | Beneficiary's birth date | "Xth day of Month Year" |
+| `{beneficiary_relationship}` | Relationship to requestor | UPPERCASE |
+
+**Standard Fields:**
+| Placeholder | Description | Format |
+|-------------|-------------|--------|
+| `{purpose_of_request}` | Purpose | UPPERCASE |
+| `{issue_date}` | Issue date | Official format |
+| `{control_number}` | Document ID | "REH-2025-12345" |
+| `{barangay_captain}` | Captain name | UPPERCASE |
+| `{barangay_secretary}` | Secretary name | UPPERCASE |
 
 ---
 

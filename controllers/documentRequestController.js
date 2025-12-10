@@ -63,6 +63,10 @@ exports.createDocumentRequest = async (req, res) => {
       remarks: payload.remarks,
       photo1x1: photo1x1,
       validID: validID,
+      // Beneficiary info (for rehab certificate)
+      beneficiaryInfo: payload.beneficiaryInfo || {},
+      // Business info (for business permits)
+      businessInfo: payload.businessInfo || {},
     };
 
     console.log('💾 Creating document request with data:', documentData);

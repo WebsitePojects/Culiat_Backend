@@ -167,7 +167,11 @@ exports.getDocumentTypeDistribution = async (req, res) => {
       ctc: "Community Tax Certificate",
       good_moral: "Certificate of Good Moral",
       business_clearance: "Business Clearance",
-      building_permit: "Building Permit"
+      building_permit: "Building Permit",
+      rehab: "Rehabilitation Certificate",
+      barangay_id: "Barangay ID",
+      liquor_permit: "Liquor Permit",
+      missionary: "Missionary Certificate"
     };
 
     const series = distribution.map(d => d.count);
@@ -405,7 +409,11 @@ exports.getPopularServices = async (req, res) => {
       ctc: "Community Tax Certificate",
       good_moral: "Certificate of Good Moral",
       business_clearance: "Business Clearance",
-      building_permit: "Building Permit"
+      building_permit: "Building Permit",
+      rehab: "Rehabilitation Certificate",
+      barangay_id: "Barangay ID",
+      liquor_permit: "Liquor Permit",
+      missionary: "Missionary Certificate"
     };
 
     const popularServices = services.map(s => ({

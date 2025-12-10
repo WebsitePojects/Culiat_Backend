@@ -160,6 +160,14 @@ const documentRequestSchema = new mongoose.Schema(
       representativeContactNumber: { type: String, trim: true },
     },
 
+    // Beneficiary Information (ONLY for rehab certificate)
+    beneficiaryInfo: {
+      fullName: { type: String, trim: true },      // Beneficiary's full name (e.g., GILBERT BENGCO LEAL)
+      dateOfBirth: { type: Date },                 // Beneficiary's date of birth
+      age: { type: Number },                       // Beneficiary's age (e.g., 43)
+      relationship: { type: String, trim: true },  // Relationship to requestor (e.g., son, daughter)
+    },
+
     // Document Request details
     documentType: {
       type: String,
@@ -173,6 +181,10 @@ const documentRequestSchema = new mongoose.Schema(
         "building_permit",
         "good_moral", // Certificate of Good Moral
         "business_clearance",
+        "rehab",            // Rehabilitation Certificate
+        "barangay_id",      // Barangay ID
+        "liquor_permit",    // Liquor Permit
+        "missionary",       // Missionary Certificate
       ],
     },
     purposeOfRequest: { type: String, trim: true },
