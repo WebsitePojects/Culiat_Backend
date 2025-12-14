@@ -1,9 +1,9 @@
 const DocumentRequest = require("../models/DocumentRequest");
 const User = require("../models/User");
 const { LOGCONSTANTS } = require("../config/logConstants");
-const { logAction } = require('../utils/logHelper');
-const ROLES = require('../config/roles');
-const path = require('path');
+const { logAction } = require("../utils/logHelper");
+const ROLES = require("../config/roles");
+const path = require("path");
 
 // @desc    Create a new document request with auto-filled user data
 // @route   POST /api/document-requests/v2
@@ -11,12 +11,12 @@ const path = require('path');
 exports.createDocumentRequest = async (req, res) => {
   try {
     const userId = req.user._id;
-    
+
     // Validate required fields
     if (!req.body.documentType) {
       return res.status(400).json({
         success: false,
-        message: "Document type is required"
+        message: "Document type is required",
       });
     }
 
@@ -25,7 +25,7 @@ exports.createDocumentRequest = async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: "User not found"
+        message: "User not found",
       });
     }
 
@@ -60,7 +60,7 @@ exports.uploadFile = async (req, res) => {
     if (!req.file) {
       return res.status(400).json({
         success: false,
-        message: "No file uploaded"
+        message: "No file uploaded",
       });
     }
 
@@ -70,7 +70,7 @@ exports.uploadFile = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "File validation failed",
-        errors: validation.errors
+        errors: validation.errors,
       });
     }
 
@@ -81,7 +81,7 @@ exports.uploadFile = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "File uploaded successfully",
-      data: fileData
+      data: fileData,
     });
   } catch (error) {
     res.status(500).json({
@@ -99,7 +99,7 @@ exports.getAllDocumentRequests = async (req, res) => {
   try {
     const { status, documentType, page = 1, limit = 10 } = req.query;
     const filter = {};
-    
+
     if (status) filter.status = status;
     if (documentType) filter.documentType = documentType;
 
@@ -120,7 +120,7 @@ exports.getAllDocumentRequests = async (req, res) => {
       total,
       page: parseInt(page),
       pages: Math.ceil(total / limit),
-      data: requests
+      data: requests,
     });
   } catch (error) {
     res.status(500).json({
@@ -139,13 +139,13 @@ exports.getMyRequests = async (req, res) => {
     const requests = await DocumentRequest.find({
       applicant: req.user._id,
     })
-    .populate("processedBy", "firstName lastName")
-    .sort({ createdAt: -1 });
+      .populate("processedBy", "firstName lastName")
+      .sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,
       count: requests.length,
-      data: requests
+      data: requests,
     });
   } catch (error) {
     res.status(500).json({
@@ -168,18 +168,21 @@ exports.getDocumentRequest = async (req, res) => {
     if (!request) {
       return res.status(404).json({
         success: false,
-        message: "Document request not found"
+        message: "Document request not found",
       });
     }
 
     // Authorization: allow admin or owner
-    const isOwner = request.applicant && request.applicant._id.toString() === req.user._id.toString();
-    const isAdmin = req.user.role === ROLES.Admin || req.user.role === ROLES.SuperAdmin;
+    const isOwner =
+      request.applicant &&
+      request.applicant._id.toString() === req.user._id.toString();
+    const isAdmin =
+      req.user.role === ROLES.Admin || req.user.role === ROLES.SuperAdmin;
 
     if (!isOwner && !isAdmin) {
       return res.status(403).json({
         success: false,
-        message: "Not authorized to view this request"
+        message: "Not authorized to view this request",
       });
     }
 
@@ -189,7 +192,7 @@ exports.getDocumentRequest = async (req, res) => {
     res.status(200).json({
       success: true,
       data: request,
-      filesSummary
+      filesSummary,
     });
   } catch (error) {
     res.status(500).json({
@@ -210,49 +213,49 @@ exports.updateDocumentRequest = async (req, res) => {
     if (!request) {
       return res.status(404).json({
         success: false,
-        message: "Document request not found"
+        message: "Document request not found",
       });
     }
 
     // Only owner can update (and only if not yet approved/completed)
     const isOwner = request.applicant.toString() === req.user._id.toString();
-    
+
     if (!isOwner) {
       return res.status(403).json({
         success: false,
-        message: "Not authorized to update this request"
+        message: "Not authorized to update this request",
       });
     }
 
     // Prevent updates if already processed
-    if (['approved', 'completed', 'rejected'].includes(request.status)) {
+    if (["approved", "completed", "rejected"].includes(request.status)) {
       return res.status(400).json({
         success: false,
-        message: `Cannot update request with status: ${request.status}`
+        message: `Cannot update request with status: ${request.status}`,
       });
     }
 
     // Updatable fields
     const updatableFields = [
-      'middleName',
-      'dateOfBirth',
-      'placeOfBirth',
-      'gender',
-      'civilStatus',
-      'nationality',
-      'emergencyContact',
-      'businessName',
-      'businessAddress',
-      'applicationType',
-      'ownerRepresentative',
-      'ownerContactNumber',
-      'representativeContactNumber',
-      'purposeOfRequest',
-      'preferredPickupDate',
-      'remarks',
-      'photo1x1',
-      'validID',
-      'supportingDocuments'
+      "middleName",
+      "dateOfBirth",
+      "placeOfBirth",
+      "gender",
+      "civilStatus",
+      "nationality",
+      "emergencyContact",
+      "businessName",
+      "businessAddress",
+      "applicationType",
+      "ownerRepresentative",
+      "ownerContactNumber",
+      "representativeContactNumber",
+      "purposeOfRequest",
+      "preferredPickupDate",
+      "remarks",
+      "photo1x1",
+      "validID",
+      "supportingDocuments",
     ];
 
     updatableFields.forEach((field) => {
@@ -302,11 +305,11 @@ exports.updateDocumentRequest = async (req, res) => {
 exports.updateRequestStatus = async (req, res) => {
   try {
     const { status } = req.body;
-    
+
     if (!status) {
       return res.status(400).json({
         success: false,
-        message: "Status is required"
+        message: "Status is required",
       });
     }
 
@@ -315,17 +318,30 @@ exports.updateRequestStatus = async (req, res) => {
     if (!request) {
       return res.status(404).json({
         success: false,
-        message: "Document request not found"
+        message: "Document request not found",
       });
     }
 
     // Validate status transition
-    const validStatuses = ['pending', 'approved', 'rejected', 'completed', 'cancelled'];
+    const validStatuses = [
+      "pending",
+      "approved",
+      "rejected",
+      "completed",
+      "cancelled",
+    ];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
-        message: `Invalid status. Must be one of: ${validStatuses.join(', ')}`
+        message: `Invalid status. Must be one of: ${validStatuses.join(", ")}`,
       });
+    }
+
+    // Generate control number when approving (if not already set)
+    if (status === "approved" && !request.controlNumber) {
+      request.controlNumber = await DocumentRequest.generateControlNumber(
+        request.documentType
+      );
     }
 
     request.status = status;
@@ -364,18 +380,19 @@ exports.deleteDocumentRequest = async (req, res) => {
     if (!request) {
       return res.status(404).json({
         success: false,
-        message: "Document request not found"
+        message: "Document request not found",
       });
     }
 
     const isOwner = request.applicant.toString() === req.user._id.toString();
-    const isAdmin = req.user.role === ROLES.Admin || req.user.role === ROLES.SuperAdmin;
+    const isAdmin =
+      req.user.role === ROLES.Admin || req.user.role === ROLES.SuperAdmin;
 
     // Owner can only delete pending requests
-    if (isOwner && request.status !== 'pending') {
+    if (isOwner && request.status !== "pending") {
       return res.status(403).json({
         success: false,
-        message: "Cannot delete request that is not pending"
+        message: "Cannot delete request that is not pending",
       });
     }
 
@@ -383,7 +400,7 @@ exports.deleteDocumentRequest = async (req, res) => {
     if (!isOwner && !isAdmin) {
       return res.status(403).json({
         success: false,
-        message: "Not authorized to delete this request"
+        message: "Not authorized to delete this request",
       });
     }
 
@@ -391,7 +408,7 @@ exports.deleteDocumentRequest = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: "Document request deleted successfully"
+      message: "Document request deleted successfully",
     });
 
     await logAction(
@@ -418,7 +435,7 @@ exports.checkRequiredDocuments = async (req, res) => {
     if (!request) {
       return res.status(404).json({
         success: false,
-        message: "Document request not found"
+        message: "Document request not found",
       });
     }
 
@@ -428,7 +445,7 @@ exports.checkRequiredDocuments = async (req, res) => {
     res.status(200).json({
       success: true,
       hasRequiredDocuments: hasRequired,
-      filesSummary
+      filesSummary,
     });
   } catch (error) {
     res.status(500).json({
@@ -449,17 +466,17 @@ exports.syncWithUser = async (req, res) => {
     if (!request) {
       return res.status(404).json({
         success: false,
-        message: "Document request not found"
+        message: "Document request not found",
       });
     }
 
     // Only owner can sync
     const isOwner = request.applicant.toString() === req.user._id.toString();
-    
+
     if (!isOwner) {
       return res.status(403).json({
         success: false,
-        message: "Not authorized to sync this request"
+        message: "Not authorized to sync this request",
       });
     }
 
@@ -468,7 +485,7 @@ exports.syncWithUser = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Request synced with user profile",
-      data: request
+      data: request,
     });
   } catch (error) {
     res.status(500).json({
@@ -487,19 +504,19 @@ exports.getStatistics = async (req, res) => {
     const stats = await DocumentRequest.aggregate([
       {
         $group: {
-          _id: '$status',
-          count: { $sum: 1 }
-        }
-      }
+          _id: "$status",
+          count: { $sum: 1 },
+        },
+      },
     ]);
 
     const typeStats = await DocumentRequest.aggregate([
       {
         $group: {
-          _id: '$documentType',
-          count: { $sum: 1 }
-        }
-      }
+          _id: "$documentType",
+          count: { $sum: 1 },
+        },
+      },
     ]);
 
     const total = await DocumentRequest.countDocuments();
@@ -509,8 +526,8 @@ exports.getStatistics = async (req, res) => {
       data: {
         total,
         byStatus: stats,
-        byType: typeStats
-      }
+        byType: typeStats,
+      },
     });
   } catch (error) {
     res.status(500).json({
