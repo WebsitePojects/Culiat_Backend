@@ -116,23 +116,24 @@ The Document Request API supports 10 document types. Each document type has spec
 **Required Fields:**
 
 - `documentType`: "business_permit"
-- `lastName`, `firstName` (owner info)
+- `lastName`, `firstName`, `middleName` (owner info)
+- `fees` (amount paid)
 - `businessInfo`:
   - `businessName` (required)
   - `natureOfBusiness` (required)
   - `applicationType`: "new" | "renewal"
   - `businessAddress`: { houseNumber, street, subdivision }
-  - `ownerRepresentative`
-  - `ownerContactNumber`
+  - `orNumber` (Official Receipt number)
 - `validID` (file upload)
 
 **Template Placeholders:**
 
-- `{full_name}`, `{contact_number}`, `{email_address}`
+- `{control_number}` (Brgy. Business ID No.)
 - `{business_name}`, `{nature_of_business}`, `{application_type}`
-- `{business_full_address}`, `{business_house_number}`, `{business_street}`
-- `{owner_representative}`, `{owner_contact_number}`
-- `{issue_date}`, `{control_number}`
+- `{business_full_address}`
+- `{owner_name}` (format: LASTNAME, FIRSTNAME M.)
+- `{amount_paid}`, `{or_number}`
+- `{issue_date}`
 
 ---
 
@@ -142,11 +143,21 @@ The Document Request API supports 10 document types. Each document type has spec
 
 **Required Fields:**
 
-- Same as Business Permit
+- `documentType`: "business_clearance"
+- `lastName`, `firstName` (owner info)
+- `businessInfo`:
+  - `businessName` (required)
+  - `closureDate` (required) - Date business ceased operations
+  - `businessAddress`: { houseNumber, street }
+- `purposeOfRequest`
+- `validID` (file upload)
 
 **Template Placeholders:**
 
-- Same as Business Permit
+- `{salutation}`, `{full_name}` (requestor/owner)
+- `{business_name}`, `{business_full_address}`
+- `{closure_date}` (formatted: "30th day of December 2014")
+- `{purpose_of_request}`, `{issue_date}`, `{control_number}`
 
 ---
 

@@ -1,301 +1,315 @@
 # Document Template Placeholder Reference
 
-Use `{placeholder_name}` syntax in DOCX templates. All placeholders below are now **synced with the backend** and will work.
+Use `{placeholder_name}` syntax in DOCX templates. For images use `{%image_name%}`.
 
 ---
 
-## Quick Reference by Document Type
+## ⚡ Quick Copy-Paste Placeholders by Document
 
-### 📄 Certificate of Indigency (`indigency`)
-
-| Placeholder | Description | Format |
-|-------------|-------------|--------|
-| `{salutation}` | Mr., Mrs., Ms. | Proper Case |
-| `{full_name}` | Complete name | UPPERCASE |
-| `{full_address}` | House + street | Title Case |
-| `{barangay}` | Fixed: "Culiat" | - |
-| `{city}` | Fixed: "Quezon City" | - |
-| `{age}` | Calculated age | Number |
-| `{civil_status}` | Single, Married, etc. | UPPERCASE |
-| `{purpose_of_request}` | Why needed | UPPERCASE |
-| `{issue_date}` | Official format | "7th day of December 2025" |
-| `{control_number}` | Document ID | "IND-2025-12345" |
-| `{barangay_captain}` | Captain name | UPPERCASE |
-| `{barangay_secretary}` | Secretary name | UPPERCASE |
+> **Note:** Indigency and Rehab templates are already configured.
 
 ---
 
 ### 📄 Certificate of Residency (`residency`)
 
-| Placeholder | Description | Format |
-|-------------|-------------|--------|
-| `{salutation}` | Mr., Mrs., Ms. | Proper Case |
-| `{full_name}` | Complete name | UPPERCASE |
-| `{first_name}` | First name | UPPERCASE |
-| `{middle_name}` | Middle name | UPPERCASE |
-| `{last_name}` | Last name | UPPERCASE |
-| `{full_address}` | House + street | Title Case |
-| `{house_number}` | House/Building no. | Title Case |
-| `{street}` | Street name | Title Case |
-| `{barangay}` | Fixed: "Culiat" | - |
-| `{city}` | Fixed: "Quezon City" | - |
-| `{date_of_birth}` | Birth date | "15th day of January 1990" |
-| `{age}` | Calculated age | Number |
-| `{nationality}` | Default: Filipino | UPPERCASE |
-| `{purpose_of_request}` | Why needed | UPPERCASE |
-| `{issue_date}` | Issue date | Official format |
-| `{control_number}` | Document ID | "RES-2025-12345" |
-| `{barangay_captain}` | Captain name | UPPERCASE |
-| `{barangay_secretary}` | Secretary name | UPPERCASE |
+**File:** `Certificate of Residency(Quezon City Hall...).docx`
+
+**Copy these placeholders into your template:**
+
+```
+{salutation}
+{full_name}
+{date_of_birth}
+{civil_status}
+{full_address}
+{residency_since}
+{purpose_of_request}
+{issue_date}
+{issued_on}
+{valid_until}
+{prepared_by}
+{reference_no}
+{document_file_no}
+{control_number}
+{barangay_captain}
+{%photo_1x1%}
+```
+
+**Your Template Example:**
+
+```
+...certify that {salutation} {full_name}, born on {date_of_birth}, {civil_status}, is a bonafide resident of {full_address}, Barangay Culiat, Quezon City since {residency_since} up to present.
+
+...issued upon the request of the above-named person as a supporting document for {purpose_of_request}.
+
+Issued this {issue_date}...
+
+APPLICANT'S PHOTO        APPLICANT'S THUMBMARK
+{%photo_1x1%}
+
+Issued at : BARANGAY CULIAT HALL
+Issued on : {issued_on}
+Valid until: {valid_until}
+
+Prepared by: {prepared_by}   Reference no: {reference_no}   Document file: {document_file_no}
+```
+
+> **Photo:** Use `{%photo_1x1%}` where the 1x1 photo should appear (image placeholder)
 
 ---
 
-### 📄 Barangay Clearance (`clearance`) & Good Moral (`good_moral`)
+### 📄 Barangay Clearance (`clearance`)
 
-| Placeholder | Description | Format |
-|-------------|-------------|--------|
-| `{salutation}` | Mr., Mrs., Ms. | Proper Case |
-| `{full_name}` | Complete name | UPPERCASE |
-| `{first_name}` | First name | UPPERCASE |
-| `{middle_name}` | Middle name | UPPERCASE |
-| `{last_name}` | Last name | UPPERCASE |
-| `{suffix}` | Jr., Sr., III | UPPERCASE |
-| `{full_address}` | House + street | Title Case |
-| `{house_number}` | House number | Title Case |
-| `{street}` | Street name | Title Case |
-| `{subdivision}` | Subdivision | Title Case |
-| `{barangay}` | Fixed: "Culiat" | - |
-| `{city}` | Fixed: "Quezon City" | - |
-| `{date_of_birth}` | Birth date | Official format |
-| `{age}` | Calculated age | Number |
-| `{gender}` | Male/Female | UPPERCASE |
-| `{civil_status}` | Civil status | UPPERCASE |
-| `{nationality}` | Nationality | UPPERCASE |
-| `{contact_number}` | Phone number | As-is |
-| `{purpose_of_request}` | Why needed | UPPERCASE |
-| `{issue_date}` | Issue date | Official format |
-| `{control_number}` | Document ID | "CLE-2025-12345" |
-| `{barangay_captain}` | Captain name | UPPERCASE |
-| `{barangay_secretary}` | Secretary name | UPPERCASE |
+**File:** `Barangay Certificate.docx`
+
+**Copy these placeholders into your template:**
+
+```
+{salutation}
+{full_name}
+{first_name}
+{middle_name}
+{last_name}
+{suffix}
+{full_address}
+{house_number}
+{street}
+{subdivision}
+{barangay}
+{city}
+{date_of_birth}
+{age}
+{gender}
+{civil_status}
+{nationality}
+{contact_number}
+{purpose_of_request}
+{issue_date}
+{control_number}
+{barangay_captain}
+{barangay_secretary}
+```
+
+---
+
+### 📄 Certificate of Good Moral (`good_moral`)
+
+**File:** `Barangay Certificate.docx` (same as clearance)
+
+**Same placeholders as Barangay Clearance above.**
 
 ---
 
 ### 📄 Barangay ID (`barangay_id`)
 
-| Placeholder | Description | Format |
-|-------------|-------------|--------|
-| `{full_name}` | Complete name | UPPERCASE |
-| `{first_name}` | First name | UPPERCASE |
-| `{middle_name}` | Middle name | UPPERCASE |
-| `{last_name}` | Last name | UPPERCASE |
-| `{suffix}` | Jr., Sr., III | UPPERCASE |
-| `{full_address}` | House + street | Title Case |
-| `{barangay}` | Fixed: "Culiat" | - |
-| `{city}` | Fixed: "Quezon City" | - |
-| `{date_of_birth}` | Birth date | Official format |
-| `{gender}` | Male/Female | UPPERCASE |
-| `{civil_status}` | Civil status | UPPERCASE |
-| `{contact_number}` | Phone number | As-is |
-| `{emergency_contact_name}` | Emergency contact | UPPERCASE |
-| `{emergency_contact_relationship}` | Relationship | UPPERCASE |
-| `{emergency_contact_number}` | Contact phone | As-is |
-| `{emergency_contact_address}` | Contact address | Title Case |
-| `{issue_date}` | Issue date | Official format |
-| `{control_number}` | ID number | "BAR-2025-12345" |
+**File:** `Barangay ID.docx`
+
+**Copy these placeholders into your template:**
+
+```
+{full_name}
+{full_address}
+{birth_date_short}
+{gender}
+{civil_status}
+{residency_type}
+{precinct_no}
+{sss_gsis_no}
+{tin_no}
+{id_number}
+{issue_date_short}
+{expiration_date}
+{barangay_captain}
+{emergency_contact_name}
+{emergency_contact_relationship}
+{emergency_contact_number}
+{emergency_contact_address}
+```
+
+**Your Template Example:**
+
+```
+{full_name}
+Address: {full_address}    Birth Date: {birth_date_short}    Gender: {gender}
+Status: {civil_status}     Residency: {residency_type}
+Precinct No: {precinct_no}     SSS/GSIS No: {sss_gsis_no}    TIN No: {tin_no}
+
+ID No: {id_number}
+
+Date of Issue: {issue_date_short}
+Date of Expiration: {expiration_date}    {barangay_captain}
+                                         Punong Barangay
+
+IN CASE OF EMERGENCY PLEASE NOTIFY:
+Name: {emergency_contact_name}    Relationship: {emergency_contact_relationship}
+Contact No: {emergency_contact_number}
+Address: {emergency_contact_address}
+```
 
 ---
 
-### 🏢 Business Permit (`business_permit`) & Business Clearance (`business_clearance`)
+### 🏢 Business Permit (`business_permit`)
 
-**Owner Information:**
+**File:** `Certificate for Business Permit.docx`
 
-| Placeholder | Description | Format |
-|-------------|-------------|--------|
-| `{salutation}` | Mr., Mrs., Ms. | Proper Case |
-| `{full_name}` | Owner's complete name | UPPERCASE |
-| `{first_name}` | Owner's first name | UPPERCASE |
-| `{last_name}` | Owner's last name | UPPERCASE |
-| `{full_address}` | Owner's address | Title Case |
-| `{contact_number}` | Owner's phone | As-is |
-| `{email_address}` | Owner's email | lowercase |
+**Copy these placeholders into your template:**
 
-**Business Information:**
+```
+{control_number}
+{business_name}
+{business_full_address}
+{nature_of_business}
+{application_type}
+{owner_name}
+{amount_paid}
+{or_number}
+{issue_date}
+{barangay_captain}
+{barangay_secretary}
+```
 
-| Placeholder | Description | Format |
-|-------------|-------------|--------|
-| `{business_name}` | Business name | UPPERCASE |
-| `{nature_of_business}` | Type of business | UPPERCASE |
-| `{application_type}` | NEW or RENEWAL | UPPERCASE |
+**Your Template Example:**
 
-**Business Address:**
+```
+Brgy. Business ID No. : {control_number}
 
-| Placeholder | Description | Format |
-|-------------|-------------|--------|
-| `{business_full_address}` | Business address | Title Case |
-| `{business_house_number}` | Building/Unit no. | Title Case |
-| `{business_street}` | Street name | Title Case |
-| `{business_subdivision}` | Area/Subdivision | Title Case |
-| `{business_barangay}` | Fixed: "Culiat" | - |
-| `{business_city}` | Fixed: "Quezon City" | - |
+Business Name    : {business_name}
+Business Address : {business_full_address} BRGY. CULIAT QC
+Business Type    : {nature_of_business}
+Status           : {application_type}
 
-**Representative:**
+Owners Name      : {owner_name}     Amount Paid : {amount_paid}
+OR No.           : {or_number}
 
-| Placeholder | Description | Format |
-|-------------|-------------|--------|
-| `{owner_representative}` | Representative name | UPPERCASE |
-| `{owner_contact_number}` | Owner's phone | As-is |
-| `{representative_contact_number}` | Rep's phone | As-is |
+Given this {issue_date} at Barangay Culiat...
+```
 
-**Standard Fields:**
+---
 
-| Placeholder | Description | Format |
-|-------------|-------------|--------|
-| `{purpose_of_request}` | Purpose | UPPERCASE |
-| `{issue_date}` | Issue date | Official format |
-| `{control_number}` | Document ID | "BUS-2025-12345" |
-| `{barangay_captain}` | Captain name | UPPERCASE |
-| `{barangay_secretary}` | Secretary name | UPPERCASE |
+### 🏢 Business Closure (`business_clearance`)
+
+**File:** `Certificate for Business Closure.docx`
+
+**Copy these placeholders into your template:**
+
+```
+{salutation}
+{full_name}
+{business_name}
+{business_full_address}
+{closure_date}
+{purpose_of_request}
+{issue_date}
+{control_number}
+{barangay_captain}
+{barangay_secretary}
+```
+
+**Your Template Example:**
+
+```
+...has cease its operation in this barangay effective {closure_date}...
+
+...upon the request of {salutation} {full_name}, Owner of the above-mentioned establishment as requirement for {purpose_of_request}.
+
+Issued this {issue_date}...
+```
 
 ---
 
 ### 🍺 Liquor Permit (`liquor_permit`)
 
-Same as **Business Permit** placeholders above.
+**File:** `Certificate for Liquor Permit.docx`
+
+**Copy these placeholders into your template:**
+
+```
+{full_name}
+{business_name}
+{business_full_address}
+{issue_date}
+{control_number}
+{barangay_captain}
+{barangay_secretary}
+```
+
+**Your Template Example:**
+
+```
+...interposed no objection to the liquor permit application of {full_name}, owner of {business_name}, located at {business_full_address}, CULIAT QC...
+
+Given this {issue_date} at Barangay Culiat...
+```
 
 ---
 
 ### ⛪ Missionary Certificate (`missionary`)
 
-Same as **Barangay Clearance** placeholders.
+**File:** `Certificate for Missionary.docx`
+
+**Copy these placeholders into your template:**
+
+```
+{salutation}
+{full_name}
+{full_address}
+{acr_number}
+{acr_valid_until}
+{passport_number}
+{nationality}
+{purpose_of_request}
+{issue_date}
+{control_number}
+{barangay_captain}
+{barangay_secretary}
+```
+
+**Your Template Example:**
+
+```
+...certify that {salutation} {full_name}, of legal age, with postal address at {full_address}, Brgy. Culiat QC...
+
+ACR No.      : {acr_number}
+Valid Until  : {acr_valid_until}
+Passport No. : {passport_number}
+Nationality  : {nationality}
+
+...issued upon the request of {salutation} {full_name} as one of the requirements to renew his/her {purpose_of_request} from the Bureau of Immigration...
+
+Issued this {issue_date} in Barangay Culiat...
+```
 
 ---
 
-### 🏥 Rehabilitation Certificate (`rehab`)
+## Control Number Prefixes
 
-**Requestor Information:**
-| Placeholder | Description | Format |
-|-------------|-------------|--------|
-| `{salutation}` | Mr., Mrs., Ms. | Proper Case |
-| `{full_name}` | Requestor's complete name | UPPERCASE |
-| `{full_address}` | House + street | Title Case |
-| `{barangay}` | Fixed: "Culiat" | - |
-| `{city}` | Fixed: "Quezon City" | - |
-| `{nationality}` | Default: Filipino | UPPERCASE |
-
-**Beneficiary Information (person requesting rehabilitation):**
-| Placeholder | Description | Format |
-|-------------|-------------|--------|
-| `{beneficiary_name}` | Beneficiary's complete name | UPPERCASE |
-| `{beneficiary_age}` | Beneficiary's age | Number |
-| `{beneficiary_date_of_birth}` | Beneficiary's birth date | "Xth day of Month Year" |
-| `{beneficiary_relationship}` | Relationship to requestor | UPPERCASE |
-
-**Standard Fields:**
-| Placeholder | Description | Format |
-|-------------|-------------|--------|
-| `{purpose_of_request}` | Purpose | UPPERCASE |
-| `{issue_date}` | Issue date | Official format |
-| `{control_number}` | Document ID | "REH-2025-12345" |
-| `{barangay_captain}` | Captain name | UPPERCASE |
-| `{barangay_secretary}` | Secretary name | UPPERCASE |
+| Document Type        | Prefix | Example        |
+| -------------------- | ------ | -------------- |
+| `indigency`          | IND    | IND-2025-00001 |
+| `residency`          | RES    | RES-2025-00001 |
+| `clearance`          | CLR    | CLR-2025-00001 |
+| `good_moral`         | GMC    | GMC-2025-00001 |
+| `business_permit`    | BPM    | BPM-2025-00001 |
+| `business_clearance` | BCL    | BCL-2025-00001 |
+| `barangay_id`        | BID    | BID-2025-00001 |
+| `liquor_permit`      | LQR    | LQR-2025-00001 |
+| `missionary`         | MIS    | MIS-2025-00001 |
+| `rehab`              | REH    | REH-2025-00001 |
 
 ---
 
-## All Available Placeholders (Master List)
+## Placeholder Format Reference
 
-### Personal Information
-| Placeholder | Format |
-|-------------|--------|
-| `{salutation}` | Proper Case |
-| `{full_name}` | UPPERCASE |
-| `{first_name}` | UPPERCASE |
-| `{middle_name}` | UPPERCASE |
-| `{last_name}` | UPPERCASE |
-| `{suffix}` | UPPERCASE |
-
-### Address
-| Placeholder | Format |
-|-------------|--------|
-| `{full_address}` | Title Case |
-| `{house_number}` | Title Case |
-| `{street}` | Title Case |
-| `{subdivision}` | Title Case |
-| `{barangay}` | Fixed: "Culiat" |
-| `{city}` | Fixed: "Quezon City" |
-
-### Demographics
-| Placeholder | Format |
-|-------------|--------|
-| `{date_of_birth}` | "Xth day of Month Year" |
-| `{place_of_birth}` | UPPERCASE |
-| `{age}` | Number |
-| `{gender}` | UPPERCASE |
-| `{civil_status}` | UPPERCASE |
-| `{nationality}` | UPPERCASE |
-| `{contact_number}` | As-is |
-
-### Additional Personal
-| Placeholder | Format |
-|-------------|--------|
-| `{tin_number}` | As-is |
-| `{sss_gsis_number}` | As-is |
-| `{precinct_number}` | As-is |
-| `{religion}` | UPPERCASE |
-| `{height_weight}` | As-is |
-| `{color_of_hair_eyes}` | As-is |
-| `{occupation}` | UPPERCASE |
-| `{email_address}` | As-is |
-| `{request_for}` | UPPERCASE |
-
-### Spouse Information
-| Placeholder | Format |
-|-------------|--------|
-| `{spouse_name}` | UPPERCASE |
-| `{spouse_occupation}` | UPPERCASE |
-| `{spouse_contact_number}` | As-is |
-
-### Emergency Contact
-| Placeholder | Format |
-|-------------|--------|
-| `{emergency_contact_name}` | UPPERCASE |
-| `{emergency_contact_relationship}` | UPPERCASE |
-| `{emergency_contact_number}` | As-is |
-| `{emergency_contact_address}` | Title Case |
-
-### Request Info
-| Placeholder | Format |
-|-------------|--------|
-| `{purpose_of_request}` | UPPERCASE |
-| `{remarks}` | As-is |
-| `{preferred_pickup_date}` | Official format |
-
-### Document Metadata
-| Placeholder | Format |
-|-------------|--------|
-| `{issue_date}` | "7th day of December 2025" |
-| `{control_number}` | "XXX-2025-12345" |
-
-### Officials
-| Placeholder | Format |
-|-------------|--------|
-| `{barangay_captain}` | UPPERCASE |
-| `{barangay_secretary}` | UPPERCASE |
-
-### Business (for business documents only)
-| Placeholder | Format |
-|-------------|--------|
-| `{business_name}` | UPPERCASE |
-| `{nature_of_business}` | UPPERCASE |
-| `{application_type}` | UPPERCASE |
-| `{business_full_address}` | Title Case |
-| `{business_house_number}` | Title Case |
-| `{business_street}` | Title Case |
-| `{business_subdivision}` | Title Case |
-| `{business_barangay}` | Fixed: "Culiat" |
-| `{business_city}` | Fixed: "Quezon City" |
-| `{owner_representative}` | UPPERCASE |
-| `{owner_contact_number}` | As-is |
-| `{representative_contact_number}` | As-is |
+| Placeholder        | Format      | Example                   |
+| ------------------ | ----------- | ------------------------- |
+| `{salutation}`     | Proper Case | Mr., Mrs., Ms.            |
+| `{full_name}`      | UPPERCASE   | JUAN DELA CRUZ            |
+| `{full_address}`   | Title Case  | 123 Main Street           |
+| `{date_of_birth}`  | Official    | 15th day of January 1990  |
+| `{issue_date}`     | Official    | 14th day of December 2025 |
+| `{control_number}` | Standard    | RES-2025-00001            |
+| `{barangay}`       | Fixed       | Culiat                    |
+| `{city}`           | Fixed       | Quezon City               |
 
 ---
 
@@ -305,26 +319,8 @@ Same as **Barangay Clearance** placeholders.
 public/Certificates and Dashboard (Culiat)/
 ```
 
-## Template Files
-
-| Type | File |
-|------|------|
-| `indigency` | Certificate of Indigency.docx |
-| `residency` | Certificate of Residency(Quezon City Hall...).docx |
-| `clearance` | Barangay Certificate.docx |
-| `business_permit` | Certificate for Business Permit.docx |
-| `business_clearance` | Certificate for Business Closure.docx |
-| `good_moral` | Barangay Certificate.docx |
-| `barangay_id` | Barangay ID.docx |
-| `liquor_permit` | Certificate for Liquor Permit.docx |
-| `missionary` | Certificate for Missionary.docx |
-| `rehab` | Certificate for Rehab.docx |
-
----
-
 ## Notes
 
-1. **Missing Data**: If data is not available, placeholder becomes empty string
-2. **Date Format**: "Xth day of Month Year" (e.g., "7th day of December 2025")
-3. **Control Number**: `{PREFIX}-{YEAR}-{5 DIGITS}` (e.g., "IND-2025-12345")
-4. **Fixed Values**: `{barangay}` = "Culiat", `{city}` = "Quezon City"
+1. **Missing Data**: Placeholder becomes empty string if data unavailable
+2. **Image Placeholder**: Use `{%photo_1x1%}` syntax (with %) for photos
+3. **Photo Required**: Only Certificate of Residency requires photo embedding

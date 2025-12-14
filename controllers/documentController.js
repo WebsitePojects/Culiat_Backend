@@ -71,6 +71,39 @@ const formatOfficialDate = (date) => {
 };
 
 /**
+ * Format date as MM-DD-YYYY (for Barangay ID birth date)
+ */
+const formatShortDate = (date) => {
+  if (!date) return "";
+  const d = new Date(date);
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const year = d.getFullYear();
+  return `${month}-${day}-${year}`;
+};
+
+/**
+ * Format date as MM/DD/YYYY (for Barangay ID issue/expiration dates)
+ */
+const formatSlashDate = (date) => {
+  if (!date) return "";
+  const d = new Date(date);
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const year = d.getFullYear();
+  return `${month}/${day}/${year}`;
+};
+
+/**
+ * Get expiration date (1 year from issue date)
+ */
+const getExpirationDate = (issueDate) => {
+  const d = new Date(issueDate || new Date());
+  d.setFullYear(d.getFullYear() + 1);
+  return d;
+};
+
+/**
  * Determine salutation - use explicit if provided, otherwise derive from gender/civilStatus
  */
 const getSalutation = (requestData) => {
@@ -145,6 +178,23 @@ const buildFullName = (firstName, middleName, lastName, suffix) => {
   const parts = [firstName, middleName, lastName].filter(Boolean);
   if (suffix) parts.push(suffix);
   return parts.join(" ").toUpperCase();
+};
+
+/**
+ * Build owner name in LASTNAME, FIRSTNAME M. format - UPPERCASE
+ */
+const buildOwnerName = (lastName, firstName, middleName) => {
+  if (!lastName && !firstName) return "";
+
+  let name = (lastName || "").toUpperCase();
+  if (firstName) {
+    name += ", " + firstName.toUpperCase();
+  }
+  if (middleName) {
+    // Get first letter of middle name
+    name += " " + middleName.charAt(0).toUpperCase() + ".";
+  }
+  return name;
 };
 
 /**
@@ -365,6 +415,11 @@ exports.generateDocumentFile = async (req, res) => {
         documentRequest.businessInfo?.applicationType || ""
       ).toUpperCase(),
 
+      // Closure date (for business_clearance)
+      closure_date: documentRequest.businessInfo?.closureDate
+        ? formatOfficialDate(documentRequest.businessInfo.closureDate)
+        : "",
+
       // Business Address
       business_full_address: buildBusinessAddress(
         documentRequest.businessInfo?.businessAddress
@@ -390,6 +445,18 @@ exports.generateDocumentFile = async (req, res) => {
       representative_contact_number:
         documentRequest.businessInfo?.representativeContactNumber || "",
 
+      // OR Number and Amount Paid (for business permits)
+      or_number: documentRequest.businessInfo?.orNumber || "",
+      amount_paid: documentRequest.fees?.toFixed(2) || "0.00",
+      fees: documentRequest.fees?.toFixed(2) || "0.00",
+
+      // Owner name in LASTNAME, FIRSTNAME M. format
+      owner_name: buildOwnerName(
+        documentRequest.lastName,
+        documentRequest.firstName,
+        documentRequest.middleName
+      ),
+
       // ========== BENEFICIARY INFORMATION (for rehab certificate) ==========
       beneficiary_name: (
         documentRequest.beneficiaryInfo?.fullName || ""
@@ -401,6 +468,43 @@ exports.generateDocumentFile = async (req, res) => {
       beneficiary_relationship: (
         documentRequest.beneficiaryInfo?.relationship || ""
       ).toUpperCase(),
+
+      // ========== BARANGAY ID SPECIFIC FIELDS ==========
+      // Short date formats for Barangay ID
+      birth_date_short: formatShortDate(documentRequest.dateOfBirth),
+      issue_date_short: formatSlashDate(new Date()),
+      expiration_date: formatSlashDate(getExpirationDate(new Date())),
+
+      // Residency type
+      residency_type: (documentRequest.residencyType || "").toUpperCase(),
+
+      // ID numbers
+      id_number: getControlNumber(documentRequest), // Same as control_number
+      precinct_no: documentRequest.precinctNumber || "None",
+      sss_gsis_no: documentRequest.sssGsisNumber || "None",
+      tin_no: documentRequest.tinNumber || "None",
+
+      // ========== FOREIGN NATIONAL INFO (for missionary certificate) ==========
+      acr_number: documentRequest.foreignNationalInfo?.acrNumber || "",
+      acr_valid_until: documentRequest.foreignNationalInfo?.acrValidUntil
+        ? formatOfficialDate(documentRequest.foreignNationalInfo.acrValidUntil)
+        : "",
+      passport_number:
+        documentRequest.foreignNationalInfo?.passportNumber || "",
+
+      // ========== CERTIFICATE OF RESIDENCY SPECIFIC FIELDS ==========
+      residency_since: documentRequest.residencyInfo?.residencySince || "",
+      prepared_by: documentRequest.residencyInfo?.preparedBy || "",
+      reference_no: documentRequest.residencyInfo?.referenceNo || "",
+      document_file_no: documentRequest.residencyInfo?.documentFileNo || "",
+
+      // Short date formats for residency certificate
+      issued_on: formatSlashDate(new Date()),
+      valid_until: formatSlashDate(getExpirationDate(new Date())),
+      issued_on_text: formatOfficialDate(new Date()).replace(
+        /(\d+)(st|nd|rd|th) day of /,
+        ""
+      ),
     };
 
     // ========== PHOTO FOR RESIDENCY DOCUMENTS ==========

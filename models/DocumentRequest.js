@@ -129,6 +129,28 @@ const documentRequestSchema = new mongoose.Schema(
 
     requestFor: { type: String, trim: true }, // Added field
 
+    // Residency type for Barangay ID
+    residencyType: {
+      type: String,
+      enum: ["owner", "renter", "boarder", "relative", "other"],
+      trim: true,
+    },
+
+    // Residency info (for Certificate of Residency)
+    residencyInfo: {
+      residencySince: { type: String, trim: true }, // e.g., "January 2008"
+      preparedBy: { type: String, trim: true }, // Who prepared the document
+      referenceNo: { type: String, trim: true }, // e.g., "RN2025-4710"
+      documentFileNo: { type: String, trim: true }, // e.g., "DFN2025-4707"
+    },
+
+    // Foreign national info (for Missionary Certificate)
+    foreignNationalInfo: {
+      acrNumber: { type: String, trim: true }, // Alien Certificate of Registration
+      acrValidUntil: { type: Date }, // ACR validity date
+      passportNumber: { type: String, trim: true },
+    },
+
     // Spouse Information (if married)
     spouseInfo: {
       name: { type: String, trim: true },
@@ -157,6 +179,8 @@ const documentRequestSchema = new mongoose.Schema(
       // Nature of Business
       applicationType: { type: String, enum: ["new", "renewal"] },
       natureOfBusiness: { type: String, trim: true },
+      closureDate: { type: Date }, // Effective date of business closure
+      orNumber: { type: String, trim: true }, // Official Receipt number
       ownerRepresentative: { type: String, trim: true },
       ownerContactNumber: { type: String, trim: true },
       representativeContactNumber: { type: String, trim: true },
