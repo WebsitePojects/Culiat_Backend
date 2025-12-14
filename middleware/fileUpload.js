@@ -1,8 +1,17 @@
 ﻿const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const { cloudinary } = require('../config/cloudinary');
 
-// Ensure upload directories exist
+// Check if Cloudinary is configured
+const isCloudinaryConfigured = () => {
+  return process.env.CLOUDINARY_CLOUD_NAME && 
+         process.env.CLOUDINARY_API_KEY && 
+         process.env.CLOUDINARY_API_SECRET;
+};
+
+// Local upload directories (fallback when Cloudinary is not configured)
 const uploadDirs = {
   proofs: 'uploads/proofs',
   validIDs: 'uploads/validIDs',
@@ -11,32 +20,55 @@ const uploadDirs = {
   achievements: 'uploads/achievements',
 };
 
-// Create directories if they don't exist
+// Create local directories if they don't exist (for fallback)
 Object.values(uploadDirs).forEach(dir => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
 });
 
-// Configure storage with dynamic destination
-const storage = multer.diskStorage({
+// Get folder name based on field name
+const getFolderForField = (fieldname) => {
+  switch (fieldname) {
+    case 'validID':
+      return 'validIDs';
+    case 'photo1x1':
+      return 'photos';
+    case 'supportingDocuments':
+      return 'documents';
+    case 'proofOfResidency':
+      return 'proofs';
+    case 'achievementImage':
+      return 'achievements';
+    case 'birthCertificateDoc':
+      return 'documents';
+    default:
+      return 'proofs';
+  }
+};
+
+// Cloudinary storage configuration
+const cloudinaryStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: async (req, file) => {
+    const folder = getFolderForField(file.fieldname);
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const fieldname = file.fieldname || 'file';
+    
+    return {
+      folder: `culiat-barangay/${folder}`,
+      allowed_formats: ['jpg', 'jpeg', 'png'],
+      transformation: [{ quality: 'auto' }],
+      public_id: `${fieldname}-${uniqueSuffix}`
+    };
+  }
+});
+
+// Local disk storage configuration (fallback)
+const diskStorage = multer.diskStorage({
   destination: function (req, file, cb) {
-    let uploadDir = uploadDirs.proofs; // default
-    
-    // Determine directory based on field name
-    if (file.fieldname === 'validID') {
-      uploadDir = uploadDirs.validIDs;
-    } else if (file.fieldname === 'photo1x1') {
-      uploadDir = uploadDirs.photos;
-    } else if (file.fieldname === 'supportingDocuments') {
-      uploadDir = uploadDirs.documents;
-    } else if (file.fieldname === 'proofOfResidency') {
-      uploadDir = uploadDirs.proofs;
-    } else if (file.fieldname === 'achievementImage') {
-      uploadDir = uploadDirs.achievements;
-    }
-    
-    cb(null, uploadDir);
+    const folder = getFolderForField(file.fieldname);
+    cb(null, uploadDirs[folder] || uploadDirs.proofs);
   },
   filename: function (req, file, cb) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
@@ -57,6 +89,16 @@ const fileFilter = (req, file, cb) => {
     cb(new Error('Only JPG, JPEG, and PNG files are allowed'));
   }
 };
+
+// Choose storage based on environment configuration
+const storage = isCloudinaryConfigured() ? cloudinaryStorage : diskStorage;
+
+// Log which storage is being used
+if (isCloudinaryConfigured()) {
+  console.log('📁 Using Cloudinary for file storage');
+} else {
+  console.log('📁 Using local disk storage (Cloudinary not configured)');
+}
 
 // Create multer upload instance
 const upload = multer({

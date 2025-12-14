@@ -235,6 +235,11 @@ const documentRequestSchema = new mongoose.Schema(
       enum: ["unpaid", "paid", "waived"],
       default: "unpaid",
     },
+    // Payment tracking fields
+    paymentReference: { type: String, trim: true },
+    paymentMethod: { type: String, trim: true },
+    paidAt: { type: Date },
+    paymentWaivedReason: { type: String, trim: true },
 
     createdAt: { type: Date, default: Date.now },
   },

@@ -4,6 +4,25 @@ const { LOGCONSTANTS } = require("../config/logConstants");
 const { getRoleName } = require('../utils/roleHelpers');
 const { logAction } = require('../utils/logHelper');
 
+// Check if using Cloudinary
+const isCloudinaryEnabled = () => {
+  return process.env.CLOUDINARY_CLOUD_NAME && 
+         process.env.CLOUDINARY_API_KEY && 
+         process.env.CLOUDINARY_API_SECRET;
+};
+
+// Helper to get file URL from uploaded file
+const getFileUrl = (file) => {
+  if (!file) return null;
+  // Cloudinary returns the URL in file.path
+  if (isCloudinaryEnabled() && file.path && file.path.includes('cloudinary')) {
+    return file.path;
+  }
+  // Local storage - construct URL from path
+  const normalizedPath = file.path.replace(/\\/g, '/');
+  return `/${normalizedPath}`;
+};
+
 // @desc    Create a new document request
 // @route   POST /api/document-requests
 // @access  Private (Resident/Admin)
@@ -17,11 +36,9 @@ exports.createDocumentRequest = async (req, res) => {
     let photo1x1 = null;
     if (req.files?.photo1x1) {
       const file = req.files.photo1x1[0];
-      // Normalize path to use forward slashes for URL
-      const normalizedPath = file.path.replace(/\\/g, '/');
       photo1x1 = {
-        url: `/${normalizedPath}`,
-        filename: file.filename,
+        url: getFileUrl(file),
+        filename: file.filename || file.originalname,
         originalName: file.originalname,
         mimeType: file.mimetype,
         fileSize: file.size
@@ -31,11 +48,9 @@ exports.createDocumentRequest = async (req, res) => {
     let validID = null;
     if (req.files?.validID) {
       const file = req.files.validID[0];
-      // Normalize path to use forward slashes for URL
-      const normalizedPath = file.path.replace(/\\/g, '/');
       validID = {
-        url: `/${normalizedPath}`,
-        filename: file.filename,
+        url: getFileUrl(file),
+        filename: file.filename || file.originalname,
         originalName: file.originalname,
         mimeType: file.mimetype,
         fileSize: file.size
@@ -393,13 +408,18 @@ exports.uploadPicture = async (req, res) => {
         .json({ success: false, message: "No file uploaded" });
     }
 
+    // Check if Cloudinary URL exists
+    const fileUrl = req.file.path && req.file.path.includes('cloudinary')
+      ? req.file.path
+      : `/uploads/document-requests/${req.file.filename}`;
+    
     // create Picture document
     const pic = await Picture.create({
-      filename: req.file.filename,
+      filename: req.file.filename || req.file.public_id,
       originalName: req.file.originalname,
       mimeType: req.file.mimetype,
       size: req.file.size,
-      url: `/uploads/document-requests/${req.file.filename}`,
+      url: fileUrl,
       uploadedBy: req.user?._id,
       isDocument: true,
     });

@@ -1,6 +1,41 @@
 const Achievement = require('../models/Achievement');
 const fs = require('fs');
 const path = require('path');
+const { deleteFromCloudinary, getPublicIdFromUrl } = require('../config/cloudinary');
+
+// Check if using Cloudinary
+const isCloudinaryEnabled = () => {
+  return process.env.CLOUDINARY_CLOUD_NAME && 
+         process.env.CLOUDINARY_API_KEY && 
+         process.env.CLOUDINARY_API_SECRET;
+};
+
+// Helper to get image URL/path from uploaded file
+const getImageFromFile = (file) => {
+  if (!file) return null;
+  // Cloudinary returns the URL in file.path
+  // Local storage returns just the filename
+  return file.path || file.filename;
+};
+
+// Helper to delete old image
+const deleteOldImage = async (imageUrl) => {
+  if (!imageUrl || imageUrl === 'no-photo.jpg') return;
+  
+  if (isCloudinaryEnabled() && imageUrl.includes('cloudinary')) {
+    // Delete from Cloudinary
+    const publicId = getPublicIdFromUrl(imageUrl);
+    if (publicId) {
+      await deleteFromCloudinary(publicId);
+    }
+  } else {
+    // Delete from local storage
+    const imagePath = path.join(__dirname, '../uploads/achievements', imageUrl);
+    if (fs.existsSync(imagePath)) {
+      fs.unlinkSync(imagePath);
+    }
+  }
+};
 
 // @desc    Get all achievements
 // @route   GET /api/achievements
@@ -58,7 +93,8 @@ exports.createAchievement = async (req, res) => {
     
     let image = 'no-photo.jpg';
     if (req.file) {
-      image = req.file.filename;
+      // Use Cloudinary URL (file.path) or local filename
+      image = getImageFromFile(req.file);
     }
 
     const achievement = await Achievement.create({
@@ -105,13 +141,9 @@ exports.updateAchievement = async (req, res) => {
 
     if (req.file) {
       // Delete old image if it's not the default one
-      if (achievement.image && achievement.image !== 'no-photo.jpg') {
-        const oldImagePath = path.join(__dirname, '../uploads/achievements', achievement.image);
-        if (fs.existsSync(oldImagePath)) {
-          fs.unlinkSync(oldImagePath);
-        }
-      }
-      fieldsToUpdate.image = req.file.filename;
+      await deleteOldImage(achievement.image);
+      // Use Cloudinary URL (file.path) or local filename
+      fieldsToUpdate.image = getImageFromFile(req.file);
     }
 
     achievement = await Achievement.findByIdAndUpdate(req.params.id, fieldsToUpdate, {
@@ -147,12 +179,7 @@ exports.deleteAchievement = async (req, res) => {
     }
 
     // Delete image if it's not the default one
-    if (achievement.image && achievement.image !== 'no-photo.jpg') {
-      const imagePath = path.join(__dirname, '../uploads/achievements', achievement.image);
-      if (fs.existsSync(imagePath)) {
-        fs.unlinkSync(imagePath);
-      }
-    }
+    await deleteOldImage(achievement.image);
 
     await achievement.deleteOne();
 

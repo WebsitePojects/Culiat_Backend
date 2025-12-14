@@ -6,6 +6,24 @@ const { LOGCONSTANTS } = require("../config/logConstants");
 const { getRoleName } = require("../utils/roleHelpers");
 const { logAction } = require("../utils/logHelper");
 
+// Check if using Cloudinary
+const isCloudinaryEnabled = () => {
+  return process.env.CLOUDINARY_CLOUD_NAME && 
+         process.env.CLOUDINARY_API_KEY && 
+         process.env.CLOUDINARY_API_SECRET;
+};
+
+// Helper to get file URL from uploaded file
+const getFileUrl = (file) => {
+  if (!file) return null;
+  // Cloudinary returns the URL in file.path
+  if (isCloudinaryEnabled() && file.path && file.path.includes('cloudinary')) {
+    return file.path;
+  }
+  // Local storage
+  return file.path || file.filename;
+};
+
 // Generate JWT Token
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -83,9 +101,23 @@ exports.register = async (req, res) => {
     if (req.files && req.files.validID) {
       console.log("Processing validID file...");
       const validID = req.files.validID[0];
+      
+      // Log the full file object to see what Cloudinary returns
+      console.log("ValidID file object:", JSON.stringify(validID, null, 2));
+      
+      // Cloudinary returns the full URL in file.path, but also check file.secure_url
+      let fileUrl;
+      if (validID.path && validID.path.includes('cloudinary')) {
+        fileUrl = validID.path;
+      } else if (validID.secure_url) {
+        fileUrl = validID.secure_url;
+      } else {
+        fileUrl = `/uploads/validIDs/${validID.filename}`;
+      }
+      
       validIDData = {
-        url: `/uploads/validIDs/${validID.filename}`,
-        filename: validID.filename,
+        url: fileUrl,
+        filename: validID.filename || validID.public_id,
         originalName: validID.originalname,
         mimeType: validID.mimetype,
         fileSize: validID.size,
@@ -103,8 +135,14 @@ exports.register = async (req, res) => {
     if (req.files && req.files.birthCertificateDoc) {
       console.log("Processing birth certificate document...");
       const birthCertDoc = req.files.birthCertificateDoc[0];
-      birthCertificateData.documentUrl = `/uploads/birthCertificates/${birthCertDoc.filename}`;
-      birthCertificateData.documentFilename = birthCertDoc.filename;
+      
+      // Check if Cloudinary URL exists
+      const docUrl = birthCertDoc.path && birthCertDoc.path.includes('cloudinary')
+        ? birthCertDoc.path
+        : `/uploads/birthCertificates/${birthCertDoc.filename}`;
+      
+      birthCertificateData.documentUrl = docUrl;
+      birthCertificateData.documentFilename = birthCertDoc.filename || birthCertDoc.public_id;
       birthCertificateData.documentUploadedAt = new Date();
       console.log("Birth certificate document data:", birthCertificateData);
     }
@@ -492,7 +530,7 @@ exports.residentRegister = async (req, res) => {
       phoneNumber,
       role: 74934, // Resident
       registrationStatus: "pending",
-      proofOfResidency: req.file.path || req.file.filename,
+      proofOfResidency: getFileUrl(req.file),
     });
 
     res.status(201).json({

@@ -1,22 +1,17 @@
-const nodemailer = require('nodemailer');
+const SibApiV3Sdk = require('sib-api-v3-sdk');
 
-// Create reusable transporter
-const createTransporter = () => {
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT) || 587,
-    secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASSWORD,
-    },
-  });
+// Configure Brevo API client
+const configureBrevoClient = () => {
+  const defaultClient = SibApiV3Sdk.ApiClient.instance;
+  const apiKey = defaultClient.authentications['api-key'];
+  apiKey.apiKey = process.env.BREVO_API_KEY;
+  return new SibApiV3Sdk.TransactionalEmailsApi();
 };
 
 // Send verification code email
 const sendVerificationCode = async (email, code, purpose = 'verification') => {
   try {
-    const transporter = createTransporter();
+    const apiInstance = configureBrevoClient();
 
     let subject, html;
 
@@ -117,18 +112,22 @@ const sendVerificationCode = async (email, code, purpose = 'verification') => {
         `;
     }
 
-    const mailOptions = {
-      from: process.env.SMTP_FROM,
-      to: email,
-      subject: subject,
-      html: html,
+    // Create Brevo send email object
+    const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
+    
+    sendSmtpEmail.subject = subject;
+    sendSmtpEmail.htmlContent = html;
+    sendSmtpEmail.sender = { 
+      name: process.env.BREVO_SENDER_NAME || 'Barangay Culiat',
+      email: process.env.BREVO_SENDER_EMAIL 
     };
+    sendSmtpEmail.to = [{ email: email }];
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log('Email sent:', info.messageId);
-    return { success: true, messageId: info.messageId };
+    const response = await apiInstance.sendTransacEmail(sendSmtpEmail);
+    console.log('Email sent via Brevo:', response.messageId);
+    return { success: true, messageId: response.messageId };
   } catch (error) {
-    console.error('Error sending email:', error);
+    console.error('Error sending email via Brevo:', error);
     throw error;
   }
 };

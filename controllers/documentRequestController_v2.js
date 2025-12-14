@@ -5,6 +5,24 @@ const { logAction } = require('../utils/logHelper');
 const ROLES = require('../config/roles');
 const path = require('path');
 
+// Check if using Cloudinary
+const isCloudinaryEnabled = () => {
+  return process.env.CLOUDINARY_CLOUD_NAME && 
+         process.env.CLOUDINARY_API_KEY && 
+         process.env.CLOUDINARY_API_SECRET;
+};
+
+// Helper to get file URL from uploaded file
+const getFileUrl = (file) => {
+  if (!file) return null;
+  // Cloudinary returns the URL in file.path
+  if (isCloudinaryEnabled() && file.path && file.path.includes('cloudinary')) {
+    return file.path;
+  }
+  // Local storage - construct URL from filename
+  return `/uploads/proofs/${file.filename}`;
+};
+
 // @desc    Create a new document request with auto-filled user data
 // @route   POST /api/document-requests/v2
 // @access  Private (Resident)
@@ -75,7 +93,7 @@ exports.uploadFile = async (req, res) => {
     }
 
     // Create file upload object
-    const fileUrl = `/uploads/proofs/${req.file.filename}`;
+    const fileUrl = getFileUrl(req.file);
     const fileData = DocumentRequest.createFileUploadObject(req.file, fileUrl);
 
     res.status(200).json({
