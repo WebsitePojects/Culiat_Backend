@@ -60,6 +60,15 @@ exports.createDocumentRequest = async (req, res) => {
     }
 
     // Prepare data for document request
+    // Helper to safely convert to lowercase string - handles arrays and non-strings
+    const toLowerString = (val) => {
+      if (val == null) return undefined;
+      // If array, take first element (can happen with duplicate form fields)
+      const value = Array.isArray(val) ? val[0] : val;
+      if (value == null) return undefined;
+      return String(value).toLowerCase();
+    };
+
     const documentData = {
       applicant: req.user?._id,
       lastName: payload.lastName,
@@ -68,8 +77,8 @@ exports.createDocumentRequest = async (req, res) => {
       salutation: payload.salutation,
       dateOfBirth: payload.dateOfBirth,
       placeOfBirth: payload.placeOfBirth,
-      gender: payload.gender?.toLowerCase(),
-      civilStatus: payload.civilStatus?.toLowerCase().replace(/\s+/g, "_"),
+      gender: toLowerString(payload.gender),
+      civilStatus: toLowerString(payload.civilStatus)?.replace(/\s+/g, "_"),
       nationality: payload.nationality,
       address: payload.address || {},
       contactNumber: payload.contactNumber,
@@ -87,12 +96,20 @@ exports.createDocumentRequest = async (req, res) => {
       businessInfo: payload.businessInfo || {},
       // Residency info (for residency certificate)
       residencyInfo: payload.residencyInfo || {},
-      // Barangay ID specific fields
-      residencyType: payload.residencyType,
-      precinctNumber: payload.precinctNumber,
-      // Additional fields
-      tinNumber: payload.tinNumber,
-      sssGsisNumber: payload.sssGsisNumber,
+      // Barangay ID specific fields - use array-safe extraction
+      residencyType: Array.isArray(payload.residencyType)
+        ? payload.residencyType[0]
+        : payload.residencyType,
+      precinctNumber: Array.isArray(payload.precinctNumber)
+        ? payload.precinctNumber[0]
+        : payload.precinctNumber,
+      // Additional fields - use array-safe extraction
+      tinNumber: Array.isArray(payload.tinNumber)
+        ? payload.tinNumber[0]
+        : payload.tinNumber,
+      sssGsisNumber: Array.isArray(payload.sssGsisNumber)
+        ? payload.sssGsisNumber[0]
+        : payload.sssGsisNumber,
       // Foreign national info (for missionary certificate)
       foreignNationalInfo: payload.foreignNationalInfo || {},
     };
