@@ -1,8 +1,27 @@
 const DocumentRequest = require("../models/DocumentRequest");
 const Picture = require("../models/Picture");
 const { LOGCONSTANTS } = require("../config/logConstants");
-const { getRoleName } = require('../utils/roleHelpers');
-const { logAction } = require('../utils/logHelper');
+const { getRoleName } = require("../utils/roleHelpers");
+const { logAction } = require("../utils/logHelper");
+
+// Check if using Cloudinary
+const isCloudinaryEnabled = () => {
+  return process.env.CLOUDINARY_CLOUD_NAME && 
+         process.env.CLOUDINARY_API_KEY && 
+         process.env.CLOUDINARY_API_SECRET;
+};
+
+// Helper to get file URL from uploaded file
+const getFileUrl = (file) => {
+  if (!file) return null;
+  // Cloudinary returns the URL in file.path
+  if (isCloudinaryEnabled() && file.path && file.path.includes('cloudinary')) {
+    return file.path;
+  }
+  // Local storage - construct URL from path
+  const normalizedPath = file.path.replace(/\\/g, '/');
+  return `/${normalizedPath}`;
+};
 
 // @desc    Create a new document request
 // @route   POST /api/document-requests
@@ -18,7 +37,7 @@ exports.createDocumentRequest = async (req, res) => {
     if (req.files?.photo1x1) {
       const file = req.files.photo1x1[0];
       // Normalize path to use forward slashes for URL
-      const normalizedPath = file.path.replace(/\\/g, '/');
+      const normalizedPath = file.path.replace(/\\/g, "/");
       photo1x1 = {
         url: getFileUrl(file),
         filename: file.filename || file.originalname,
@@ -32,7 +51,7 @@ exports.createDocumentRequest = async (req, res) => {
     if (req.files?.validID) {
       const file = req.files.validID[0];
       // Normalize path to use forward slashes for URL
-      const normalizedPath = file.path.replace(/\\/g, '/');
+      const normalizedPath = file.path.replace(/\\/g, "/");
       validID = {
         url: getFileUrl(file),
         filename: file.filename || file.originalname,
