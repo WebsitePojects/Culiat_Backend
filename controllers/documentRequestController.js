@@ -1,4 +1,5 @@
 const DocumentRequest = require("../models/DocumentRequest");
+const User = require("../models/User");
 const Picture = require("../models/Picture");
 const { LOGCONSTANTS } = require("../config/logConstants");
 const { getRoleName } = require("../utils/roleHelpers");
@@ -26,6 +27,15 @@ exports.createDocumentRequest = async (req, res) => {
         mimeType: file.mimetype,
         fileSize: file.size,
       };
+    } else if (payload.useStoredPhoto1x1 === "true" && req.user?._id) {
+      // Reuse stored photo from user profile
+      const userWithPhoto = await User.findById(req.user._id).select(
+        "photo1x1"
+      );
+      if (userWithPhoto?.photo1x1?.url) {
+        photo1x1 = userWithPhoto.photo1x1;
+        console.log("📸 Reusing stored photo1x1 from user profile");
+      }
     }
 
     let validID = null;
@@ -40,6 +50,13 @@ exports.createDocumentRequest = async (req, res) => {
         mimeType: file.mimetype,
         fileSize: file.size,
       };
+    } else if (payload.useStoredValidID === "true" && req.user?._id) {
+      // Reuse stored valid ID from user profile
+      const userWithID = await User.findById(req.user._id).select("validID");
+      if (userWithID?.validID?.url) {
+        validID = userWithID.validID;
+        console.log("🪪 Reusing stored validID from user profile");
+      }
     }
 
     // Prepare data for document request
@@ -59,6 +76,7 @@ exports.createDocumentRequest = async (req, res) => {
       emergencyContact: payload.emergencyContact || {},
       documentType: payload.documentType,
       purposeOfRequest: payload.purposeOfRequest,
+      requestFor: payload.requestFor || payload.purposeOfRequest, // Use purposeOfRequest if requestFor not provided
       preferredPickupDate: payload.preferredPickupDate,
       remarks: payload.remarks,
       photo1x1: photo1x1,
@@ -67,6 +85,16 @@ exports.createDocumentRequest = async (req, res) => {
       beneficiaryInfo: payload.beneficiaryInfo || {},
       // Business info (for business permits)
       businessInfo: payload.businessInfo || {},
+      // Residency info (for residency certificate)
+      residencyInfo: payload.residencyInfo || {},
+      // Barangay ID specific fields
+      residencyType: payload.residencyType,
+      precinctNumber: payload.precinctNumber,
+      // Additional fields
+      tinNumber: payload.tinNumber,
+      sssGsisNumber: payload.sssGsisNumber,
+      // Foreign national info (for missionary certificate)
+      foreignNationalInfo: payload.foreignNationalInfo || {},
     };
 
     console.log("💾 Creating document request with data:", documentData);
@@ -86,6 +114,49 @@ exports.createDocumentRequest = async (req, res) => {
       message: "Document request created successfully",
       data: responseObj,
     });
+
+    // Save photo1x1 and validID to user profile for future reuse
+    // Only save if user exists and doesn't already have these documents stored
+    if (req.user?._id) {
+      try {
+        const updateData = {};
+
+        // Save photo1x1 to user profile if uploaded
+        if (photo1x1) {
+          updateData.photo1x1 = {
+            url: photo1x1.url,
+            filename: photo1x1.filename,
+            originalName: photo1x1.originalName,
+            mimeType: photo1x1.mimeType,
+            fileSize: photo1x1.fileSize,
+            uploadedAt: new Date(),
+          };
+        }
+
+        // Save validID to user profile if uploaded
+        if (validID) {
+          updateData.validID = {
+            url: validID.url,
+            filename: validID.filename,
+            originalName: validID.originalName,
+            mimeType: validID.mimeType,
+            fileSize: validID.fileSize,
+            uploadedAt: new Date(),
+          };
+        }
+
+        if (Object.keys(updateData).length > 0) {
+          await User.findByIdAndUpdate(req.user._id, { $set: updateData });
+          console.log("📂 Saved documents to user profile for future reuse");
+        }
+      } catch (profileError) {
+        // Don't fail the request if profile update fails
+        console.error(
+          "⚠️ Error saving documents to user profile:",
+          profileError
+        );
+      }
+    }
 
     await logAction(
       LOGCONSTANTS.actions.records.CREATE_RECORD,

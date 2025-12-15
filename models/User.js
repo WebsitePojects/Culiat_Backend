@@ -15,8 +15,8 @@ const userSchema = new mongoose.Schema(
     },
     salutation: {
       type: String,
-      enum: ['', 'Mr.', 'Mrs.', 'Ms.'],
-      default: '',
+      enum: ["", "Mr.", "Mrs.", "Ms."],
+      default: "",
     },
     username: {
       type: String,
@@ -332,6 +332,37 @@ const userSchema = new mongoose.Schema(
     },
     // Valid ID Upload (for registration verification)
     validID: {
+      url: {
+        type: String,
+        trim: true,
+        default: null,
+      },
+      filename: {
+        type: String,
+        trim: true,
+        default: null,
+      },
+      originalName: {
+        type: String,
+        trim: true,
+        default: null,
+      },
+      mimeType: {
+        type: String,
+        enum: ["image/jpeg", "image/jpg", "image/png", null],
+        default: null,
+      },
+      fileSize: {
+        type: Number,
+        default: null,
+      },
+      uploadedAt: {
+        type: Date,
+        default: null,
+      },
+    },
+    // 1x1 Photo Upload (for document requests - persisted for reuse)
+    photo1x1: {
       url: {
         type: String,
         trim: true,
