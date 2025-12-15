@@ -246,6 +246,38 @@ const buildEmergencyContactAddress = (emergencyContact) => {
   return toTitleCase(parts.join(", "));
 };
 
+/**
+ * Generate Reference Number (format: RN{YEAR}-{sequence from control number})
+ * Auto-generated when document is created, not user input
+ */
+const generateReferenceNo = (documentRequest) => {
+  const year = new Date().getFullYear();
+  const controlNum = documentRequest.controlNumber || "";
+  // Extract sequence from control number (e.g., "RES-2025-00001" -> "00001")
+  const parts = controlNum.split("-");
+  const sequence =
+    parts.length === 3
+      ? parts[2]
+      : String(Math.floor(1000 + Math.random() * 9000)).padStart(5, "0");
+  return `RN${year}-${sequence}`;
+};
+
+/**
+ * Generate Document File Number (format: DFN{YEAR}-{sequence from control number})
+ * Auto-generated when document is created, not user input
+ */
+const generateDocumentFileNo = (documentRequest) => {
+  const year = new Date().getFullYear();
+  const controlNum = documentRequest.controlNumber || "";
+  // Extract sequence from control number (e.g., "RES-2025-00001" -> "00001")
+  const parts = controlNum.split("-");
+  const sequence =
+    parts.length === 3
+      ? parts[2]
+      : String(Math.floor(1000 + Math.random() * 9000)).padStart(5, "0");
+  return `DFN${year}-${sequence}`;
+};
+
 // Fixed location constants for Barangay Culiat
 const BARANGAY = "Culiat";
 const CITY = "Quezon City";
@@ -494,9 +526,14 @@ exports.generateDocumentFile = async (req, res) => {
 
       // ========== CERTIFICATE OF RESIDENCY SPECIFIC FIELDS ==========
       residency_since: documentRequest.residencyInfo?.residencySince || "",
-      prepared_by: documentRequest.residencyInfo?.preparedBy || "",
-      reference_no: documentRequest.residencyInfo?.referenceNo || "",
-      document_file_no: documentRequest.residencyInfo?.documentFileNo || "",
+      // prepared_by uses only the admin's first name in Pascal case
+      prepared_by: req.user?.firstName
+        ? req.user.firstName.charAt(0).toUpperCase() +
+          req.user.firstName.slice(1).toLowerCase()
+        : "",
+      // reference_no and document_file_no are auto-generated
+      reference_no: generateReferenceNo(documentRequest),
+      document_file_no: generateDocumentFileNo(documentRequest),
 
       // Short date formats for residency certificate
       issued_on: formatSlashDate(new Date()),
@@ -513,18 +550,43 @@ exports.generateDocumentFile = async (req, res) => {
       documentRequest.documentType === "residency" &&
       documentRequest.photo1x1?.url
     ) {
-      // Convert URL to file path
-      const photoPath = documentRequest.photo1x1.url.startsWith("/")
-        ? path.join(__dirname, "..", documentRequest.photo1x1.url)
-        : documentRequest.photo1x1.url;
+      console.log("📸 Photo URL from DB:", documentRequest.photo1x1.url);
+
+      // Convert URL to file path - handle various URL formats
+      let photoPath = documentRequest.photo1x1.url;
+      if (photoPath.startsWith("/uploads")) {
+        photoPath = path.join(__dirname, "..", photoPath);
+      } else if (photoPath.startsWith("uploads")) {
+        photoPath = path.join(__dirname, "..", photoPath);
+      } else if (!path.isAbsolute(photoPath)) {
+        photoPath = path.join(__dirname, "..", photoPath);
+      }
+
+      console.log("📸 Resolved photo path:", photoPath);
+      console.log("📸 Photo exists:", fs.existsSync(photoPath));
 
       if (fs.existsSync(photoPath)) {
         templateData.photo_1x1 = photoPath;
+      } else {
+        console.warn("⚠️ Photo file not found at:", photoPath);
       }
     }
 
-    // Generate document
-    const docBuffer = await generateDocument(templatePath, templateData);
+    // Prepare image replacements for textbox images (by alt-text)
+    // In your Word template, insert a placeholder image in a textbox
+    // and set its alt-text to "photo_1x1"
+    const imageReplacements = {};
+    if (templateData.photo_1x1) {
+      imageReplacements.photo_1x1 = templateData.photo_1x1;
+    }
+
+    // Generate document with both text placeholders and alt-text image replacements
+    const docBuffer = await generateDocument(
+      templatePath,
+      templateData,
+      {},
+      imageReplacements
+    );
 
     // Set response headers for file download
     const safeLastName = (documentRequest.lastName || "Unknown").replace(

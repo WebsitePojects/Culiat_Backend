@@ -2,6 +2,17 @@
 
 Use `{placeholder_name}` syntax in DOCX templates. For images use `{%image_name%}`.
 
+> ✅ **Photo Placeholder Options:**
+>
+> **Option A: Text Placeholder (simple)**  
+> Type `{%photo_1x1%}` as plain text where you want the photo.
+>
+> **Option B: Textbox/Image with Alt-Text (precise positioning)**
+>
+> 1. Insert a placeholder image at exact position/size in your textbox
+> 2. Right-click the image → Edit Alt Text → set to `photo_1x1`
+> 3. The system will replace the image content while keeping positioning
+
 ---
 
 ## ⚡ Quick Copy-Paste Placeholders by Document
