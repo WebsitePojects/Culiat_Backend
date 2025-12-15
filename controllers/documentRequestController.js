@@ -4,56 +4,41 @@ const { LOGCONSTANTS } = require("../config/logConstants");
 const { getRoleName } = require('../utils/roleHelpers');
 const { logAction } = require('../utils/logHelper');
 
-// Check if using Cloudinary
-const isCloudinaryEnabled = () => {
-  return process.env.CLOUDINARY_CLOUD_NAME && 
-         process.env.CLOUDINARY_API_KEY && 
-         process.env.CLOUDINARY_API_SECRET;
-};
-
-// Helper to get file URL from uploaded file
-const getFileUrl = (file) => {
-  if (!file) return null;
-  // Cloudinary returns the URL in file.path
-  if (isCloudinaryEnabled() && file.path && file.path.includes('cloudinary')) {
-    return file.path;
-  }
-  // Local storage - construct URL from path
-  const normalizedPath = file.path.replace(/\\/g, '/');
-  return `/${normalizedPath}`;
-};
-
 // @desc    Create a new document request
 // @route   POST /api/document-requests
 // @access  Private (Resident/Admin)
 exports.createDocumentRequest = async (req, res) => {
   try {
     const payload = req.body || {};
-    console.log('📥 Document Request Payload:', payload);
-    console.log('📎 Uploaded Files:', req.files);
-    
+    console.log("📥 Document Request Payload:", payload);
+    console.log("📎 Uploaded Files:", req.files);
+
     // Handle uploaded files - build proper file objects for the model
     let photo1x1 = null;
     if (req.files?.photo1x1) {
       const file = req.files.photo1x1[0];
+      // Normalize path to use forward slashes for URL
+      const normalizedPath = file.path.replace(/\\/g, '/');
       photo1x1 = {
         url: getFileUrl(file),
         filename: file.filename || file.originalname,
         originalName: file.originalname,
         mimeType: file.mimetype,
-        fileSize: file.size
+        fileSize: file.size,
       };
     }
 
     let validID = null;
     if (req.files?.validID) {
       const file = req.files.validID[0];
+      // Normalize path to use forward slashes for URL
+      const normalizedPath = file.path.replace(/\\/g, '/');
       validID = {
         url: getFileUrl(file),
         filename: file.filename || file.originalname,
         originalName: file.originalname,
         mimeType: file.mimetype,
-        fileSize: file.size
+        fileSize: file.size,
       };
     }
 
@@ -67,7 +52,7 @@ exports.createDocumentRequest = async (req, res) => {
       dateOfBirth: payload.dateOfBirth,
       placeOfBirth: payload.placeOfBirth,
       gender: payload.gender?.toLowerCase(),
-      civilStatus: payload.civilStatus?.toLowerCase().replace(/\s+/g, '_'),
+      civilStatus: payload.civilStatus?.toLowerCase().replace(/\s+/g, "_"),
       nationality: payload.nationality,
       address: payload.address || {},
       contactNumber: payload.contactNumber,
@@ -84,7 +69,7 @@ exports.createDocumentRequest = async (req, res) => {
       businessInfo: payload.businessInfo || {},
     };
 
-    console.log('💾 Creating document request with data:', documentData);
+    console.log("💾 Creating document request with data:", documentData);
     const newRequest = await DocumentRequest.create(documentData);
 
     // Wrap photo fields as { url }
@@ -108,8 +93,8 @@ exports.createDocumentRequest = async (req, res) => {
       req.user
     );
   } catch (error) {
-    console.error('❌ Error creating document request:', error);
-    console.error('Error stack:', error.stack);
+    console.error("❌ Error creating document request:", error);
+    console.error("Error stack:", error.stack);
     res.status(500).json({
       success: false,
       message: "Error creating document request",
@@ -321,6 +306,13 @@ exports.updateRequestStatus = async (req, res) => {
       return res
         .status(404)
         .json({ success: false, message: "Document request not found" });
+    }
+
+    // Generate control number when approving (if not already set)
+    if (status === "approved" && !request.controlNumber) {
+      request.controlNumber = await DocumentRequest.generateControlNumber(
+        request.documentType
+      );
     }
 
     request.status = status;
