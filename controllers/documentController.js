@@ -519,7 +519,9 @@ exports.generateDocumentFile = async (req, res) => {
       // ========== FOREIGN NATIONAL INFO (for missionary certificate) ==========
       acr_number: documentRequest.foreignNationalInfo?.acrNumber || "",
       acr_valid_until: documentRequest.foreignNationalInfo?.acrValidUntil
-        ? formatOfficialDate(documentRequest.foreignNationalInfo.acrValidUntil)
+        ? formatSlashDate(
+            new Date(documentRequest.foreignNationalInfo.acrValidUntil)
+          )
         : "",
       passport_number:
         documentRequest.foreignNationalInfo?.passportNumber || "",
