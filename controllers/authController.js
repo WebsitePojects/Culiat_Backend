@@ -330,6 +330,9 @@ exports.getMe = async (req, res) => {
         spouseInfo: user.spouseInfo,
         emergencyContact: user.emergencyContact,
         birthCertificate: user.birthCertificate,
+        // Stored documents for reuse
+        validID: user.validID,
+        photo1x1: user.photo1x1,
         isActive: user.isActive,
         createdAt: user.createdAt,
       },

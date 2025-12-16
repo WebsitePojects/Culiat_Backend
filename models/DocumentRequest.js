@@ -292,23 +292,28 @@ const documentRequestSchema = new mongoose.Schema(
 // Pre-save hook to validate file uploads and business info
 documentRequestSchema.pre("save", function (next) {
   // Check if business info is required for this document type
-  const businessDocTypes = ["business_permit", "business_clearance"];
+  // Note: business_clearance only requires businessName (nature_of_business is NOT in the template)
+  const businessDocTypes = [
+    "business_permit",
+    "business_clearance",
+    "liquor_permit",
+  ];
   const isBusinessDoc = businessDocTypes.includes(this.documentType);
 
   // Validate business info for business documents
   if (isBusinessDoc) {
     if (!this.businessInfo || !this.businessInfo.businessName) {
       return next(
-        new Error(
-          "Business name is required for business permits and clearances"
-        )
+        new Error("Business name is required for business documents")
       );
     }
-    if (!this.businessInfo.natureOfBusiness) {
+    // Only business_permit requires natureOfBusiness
+    if (
+      this.documentType === "business_permit" &&
+      !this.businessInfo.natureOfBusiness
+    ) {
       return next(
-        new Error(
-          "Nature of business is required for business permits and clearances"
-        )
+        new Error("Nature of business is required for business permits")
       );
     }
   }
@@ -488,7 +493,9 @@ documentRequestSchema.methods.validateFileUpload = function (fileData) {
 
 // Method to check if this is a business-related document
 documentRequestSchema.methods.isBusinessDocument = function () {
-  return ["business_permit", "business_clearance"].includes(this.documentType);
+  return ["business_permit", "business_clearance", "liquor_permit"].includes(
+    this.documentType
+  );
 };
 
 // Method to check if all required documents are uploaded

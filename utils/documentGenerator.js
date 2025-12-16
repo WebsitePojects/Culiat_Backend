@@ -6,17 +6,152 @@ const fs = require("fs");
 const path = require("path");
 
 /**
+ * Replace images in textboxes/shapes by alt-text
+ * This function searches for existing images with specific alt-text and replaces them
+ * @param {PizZip} zip - The document zip
+ * @param {object} imageReplacements - Object mapping alt-text names to image file paths
+ * @returns {PizZip} - Modified zip
+ */
+function replaceImagesByAltText(zip, imageReplacements) {
+  if (!imageReplacements || Object.keys(imageReplacements).length === 0) {
+    return zip;
+  }
+
+  // Get document.xml content
+  const documentXml = zip.file("word/document.xml");
+  if (!documentXml) return zip;
+
+  let content = documentXml.asText();
+
+  // Get relationships to find image paths
+  const relsFile = zip.file("word/_rels/document.xml.rels");
+  if (!relsFile) return zip;
+
+  let relsContent = relsFile.asText();
+
+  // Process each image replacement
+  for (const [altTextName, imagePath] of Object.entries(imageReplacements)) {
+    if (!imagePath || !fs.existsSync(imagePath)) {
+      console.warn(
+        `Image not found for alt-text "${altTextName}": ${imagePath}`
+      );
+      continue;
+    }
+
+    // Find the drawing element that contains this alt-text
+    // The structure in DOCX is: <wp:docPr ... descr="photo_1x1" .../> within a <w:drawing> element
+    // We need to find the a:blip r:embed reference within the SAME drawing element
+
+    // Pattern to match wp:docPr with the specific alt text
+    const altTextRegex = new RegExp(`descr="[^"]*${altTextName}[^"]*"`, "i");
+
+    if (!altTextRegex.test(content)) {
+      console.log(`ℹ️ Alt-text "${altTextName}" not found in document`);
+      continue;
+    }
+
+    console.log(`📸 Found alt-text placeholder: ${altTextName}`);
+
+    // Read the new image
+    const imageBuffer = fs.readFileSync(imagePath);
+
+    // Get image extension
+    const ext = path.extname(imagePath).toLowerCase().slice(1) || "png";
+    const contentType = ext === "png" ? "image/png" : "image/jpeg";
+
+    // Find the embed rId associated with this specific alt-text
+    // We need to look for <w:drawing> blocks that contain the alt-text
+    // Pattern: <w:drawing>...<wp:docPr ... descr="photo_1x1"/>...<a:blip...r:embed="rIdX".../>...</w:drawing>
+
+    // Split content by drawing elements to find the right one
+    const drawingPattern = /<w:drawing>[\s\S]*?<\/w:drawing>/gi;
+    const drawings = content.match(drawingPattern) || [];
+
+    let targetRelId = null;
+    let targetDrawing = null;
+
+    for (const drawing of drawings) {
+      // Check if this drawing contains our alt-text
+      if (altTextRegex.test(drawing)) {
+        // Find the r:embed in this specific drawing
+        const embedMatch = drawing.match(/r:embed="([^"]+)"/);
+        if (embedMatch) {
+          targetRelId = embedMatch[1];
+          targetDrawing = drawing;
+          console.log(`📸 Found image relationship ID: ${targetRelId}`);
+          break;
+        }
+      }
+    }
+
+    if (!targetRelId) {
+      console.log(
+        `⚠️ Could not find embed reference for alt-text "${altTextName}"`
+      );
+      continue;
+    }
+
+    // Find the image path from relationships
+    const relPattern = new RegExp(
+      `<Relationship[^>]*Id="${targetRelId}"[^>]*Target="([^"]+)"[^>]*/?>`,
+      "i"
+    );
+    const relMatch = relsContent.match(relPattern);
+
+    if (relMatch && relMatch[1]) {
+      const targetImagePath = relMatch[1];
+      console.log(`📸 Found image target path: ${targetImagePath}`);
+
+      // Replace the image file in the zip directly
+      const fullImagePath = targetImagePath.startsWith("/")
+        ? `word${targetImagePath}`
+        : `word/${targetImagePath}`;
+
+      console.log(`📸 Replacing image at: ${fullImagePath}`);
+      zip.file(fullImagePath, imageBuffer);
+
+      // Update Content_Types if needed
+      const contentTypesFile = zip.file("[Content_Types].xml");
+      if (contentTypesFile) {
+        let ctContent = contentTypesFile.asText();
+        const extCheck = `Extension="${ext}"`;
+        if (!ctContent.includes(extCheck)) {
+          ctContent = ctContent.replace(
+            "</Types>",
+            `<Default Extension="${ext}" ContentType="${contentType}"/></Types>`
+          );
+          zip.file("[Content_Types].xml", ctContent);
+        }
+      }
+    }
+  }
+
+  return zip;
+}
+
+/**
  * Generate a document from template with data
  * @param {string} templatePath - Full path to template file
  * @param {object} data - Data to fill in template (including image paths for %image% placeholders)
  * @param {object} imageOptions - Optional image configuration
+ * @param {object} imageReplacements - Optional: images to replace by alt-text (for textbox images)
  * @returns {Buffer} - Generated document buffer
  */
-async function generateDocument(templatePath, data, imageOptions = {}) {
+async function generateDocument(
+  templatePath,
+  data,
+  imageOptions = {},
+  imageReplacements = {}
+) {
   // Read template file
   const content = fs.readFileSync(templatePath, "binary");
 
-  const zip = new PizZip(content);
+  let zip = new PizZip(content);
+
+  // First: Replace images by alt-text (for textbox images)
+  if (imageReplacements && Object.keys(imageReplacements).length > 0) {
+    zip = replaceImagesByAltText(zip, imageReplacements);
+  }
 
   // Configure image module for handling image placeholders
   // In templates, use: {%photo_1x1%} for image insertion
