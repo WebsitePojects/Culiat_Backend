@@ -32,7 +32,9 @@ const storages = {
   validIDs: createCloudinaryStorage('validIDs'),
   documents: createCloudinaryStorage('documents'),
   photos: createCloudinaryStorage('photos'),
-  achievements: createCloudinaryStorage('achievements')
+  achievements: createCloudinaryStorage('achievements'),
+  officials: createCloudinaryStorage('officials'),
+  barangay: createCloudinaryStorage('barangay')
 };
 
 // Helper function to delete an image from Cloudinary

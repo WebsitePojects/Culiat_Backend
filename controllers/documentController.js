@@ -8,6 +8,14 @@ const { LOGCONSTANTS } = require("../config/logConstants");
 const { logAction } = require("../utils/logHelper");
 const path = require("path");
 const fs = require("fs");
+const axios = require("axios");
+
+// Ensure temp directory exists for photo downloads
+const TEMP_DIR = path.join(__dirname, "..", "temp");
+if (!fs.existsSync(TEMP_DIR)) {
+  fs.mkdirSync(TEMP_DIR, { recursive: true });
+  console.log("📁 Created temp directory for photo processing");
+}
 
 // Templates directory path
 const TEMPLATES_DIR = path.join(
@@ -554,22 +562,69 @@ exports.generateDocumentFile = async (req, res) => {
     ) {
       console.log("📸 Photo URL from DB:", documentRequest.photo1x1.url);
 
-      // Convert URL to file path - handle various URL formats
-      let photoPath = documentRequest.photo1x1.url;
-      if (photoPath.startsWith("/uploads")) {
-        photoPath = path.join(__dirname, "..", photoPath);
-      } else if (photoPath.startsWith("uploads")) {
-        photoPath = path.join(__dirname, "..", photoPath);
-      } else if (!path.isAbsolute(photoPath)) {
-        photoPath = path.join(__dirname, "..", photoPath);
+      const photoUrl = documentRequest.photo1x1.url;
+      let photoPath = null;
+
+      // Check if it's a Cloudinary URL (web URL)
+      if (photoUrl.startsWith("http://") || photoUrl.startsWith("https://")) {
+        console.log("📸 Downloading image from Cloudinary...");
+        
+        try {
+          // Download the image from Cloudinary temporarily
+          
+          // Generate a unique temp filename
+          const tempFileName = `temp_photo_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.jpg`;
+          const tempPath = path.join(TEMP_DIR, tempFileName);
+          
+          // Download the image
+          const response = await axios({
+            method: 'GET',
+            url: photoUrl,
+            responseType: 'stream'
+          });
+          
+          // Save to temp file
+          const writer = fs.createWriteStream(tempPath);
+          response.data.pipe(writer);
+          
+          // Wait for download to complete
+          await new Promise((resolve, reject) => {
+            writer.on('finish', resolve);
+            writer.on('error', reject);
+          });
+          
+          photoPath = tempPath;
+          
+          // Clean up temp file after some time (optional cleanup in background)
+          setTimeout(() => {
+            try {
+              if (fs.existsSync(tempPath)) {
+                fs.unlinkSync(tempPath);
+              }
+            } catch (cleanupError) {
+              console.warn("⚠️ Error cleaning up temp file:", cleanupError.message);
+            }
+          }, 60000); // Clean up after 1 minute
+          
+        } catch (downloadError) {
+          console.error("❌ Error downloading photo:", downloadError.message);
+          console.warn("⚠️ Will proceed without photo");
+        }
+      } else {
+        // Handle local file paths (legacy support)
+        photoPath = photoUrl;
+        if (photoPath.startsWith("/uploads")) {
+          photoPath = path.join(__dirname, "..", photoPath);
+        } else if (photoPath.startsWith("uploads")) {
+          photoPath = path.join(__dirname, "..", photoPath);
+        } else if (!path.isAbsolute(photoPath)) {
+          photoPath = path.join(__dirname, "..", photoPath);
+        }
       }
 
-      console.log("📸 Resolved photo path:", photoPath);
-      console.log("📸 Photo exists:", fs.existsSync(photoPath));
-
-      if (fs.existsSync(photoPath)) {
+      if (photoPath && fs.existsSync(photoPath)) {
         templateData.photo_1x1 = photoPath;
-      } else {
+      } else if (photoPath) {
         console.warn("⚠️ Photo file not found at:", photoPath);
       }
     }

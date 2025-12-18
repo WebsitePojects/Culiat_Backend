@@ -1,6 +1,7 @@
 const Official = require('../models/Official');
 const { LOGCONSTANTS } = require('../config/logConstants');
 const { logAction } = require('../utils/logHelper');
+const { deleteFromCloudinary, getPublicIdFromUrl } = require('../config/cloudinary');
 
 // @desc    Get all officials
 // @route   GET /api/officials
@@ -125,7 +126,6 @@ exports.createOfficial = async (req, res) => {
       isActive,
       contactNumber,
       email,
-      photo,
       bio,
       displayOrder,
       termStart,
@@ -140,6 +140,12 @@ exports.createOfficial = async (req, res) => {
       });
     }
 
+    // Get photo URL from uploaded file (if using Cloudinary) or use provided URL
+    let photoUrl = req.body.photo || null;
+    if (req.file) {
+      photoUrl = req.file.path || req.file.secure_url || req.file.url;
+    }
+
     const official = await Official.create({
       firstName,
       lastName,
@@ -149,7 +155,7 @@ exports.createOfficial = async (req, res) => {
       isActive,
       contactNumber,
       email,
-      photo,
+      photo: photoUrl,
       bio,
       displayOrder,
       termStart,
@@ -199,7 +205,6 @@ exports.updateOfficial = async (req, res) => {
       isActive,
       contactNumber,
       email,
-      photo,
       bio,
       displayOrder,
       termStart,
@@ -216,11 +221,26 @@ exports.updateOfficial = async (req, res) => {
     if (isActive !== undefined) updateData.isActive = isActive;
     if (contactNumber !== undefined) updateData.contactNumber = contactNumber;
     if (email !== undefined) updateData.email = email;
-    if (photo !== undefined) updateData.photo = photo;
     if (bio !== undefined) updateData.bio = bio;
     if (displayOrder !== undefined) updateData.displayOrder = displayOrder;
     if (termStart !== undefined) updateData.termStart = termStart;
     if (termEnd !== undefined) updateData.termEnd = termEnd;
+
+    // Handle photo upload - if new file uploaded, delete old one from Cloudinary
+    if (req.file) {
+      // Delete old photo from Cloudinary if it exists
+      if (official.photo) {
+        const oldPublicId = getPublicIdFromUrl(official.photo);
+        if (oldPublicId) {
+          await deleteFromCloudinary(oldPublicId).catch(err => 
+            console.error('Error deleting old photo:', err)
+          );
+        }
+      }
+      updateData.photo = req.file.path || req.file.secure_url || req.file.url;
+    } else if (req.body.photo !== undefined) {
+      updateData.photo = req.body.photo;
+    }
 
     official = await Official.findByIdAndUpdate(req.params.id, updateData, {
       new: true,
@@ -340,6 +360,16 @@ exports.deleteOfficial = async (req, res) => {
 
     const officialName = `${official.firstName} ${official.lastName}`;
     const officialPosition = official.position;
+    
+    // Delete photo from Cloudinary if it exists
+    if (official.photo) {
+      const publicId = getPublicIdFromUrl(official.photo);
+      if (publicId) {
+        await deleteFromCloudinary(publicId).catch(err => 
+          console.error('Error deleting photo from Cloudinary:', err)
+        );
+      }
+    }
     
     await official.deleteOne();
 
