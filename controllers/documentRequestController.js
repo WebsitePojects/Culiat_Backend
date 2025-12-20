@@ -1,9 +1,8 @@
 const DocumentRequest = require("../models/DocumentRequest");
-const User = require("../models/User");
 const Picture = require("../models/Picture");
 const { LOGCONSTANTS } = require("../config/logConstants");
-const { getRoleName } = require("../utils/roleHelpers");
-const { logAction } = require("../utils/logHelper");
+const { getRoleName } = require('../utils/roleHelpers');
+const { logAction } = require('../utils/logHelper');
 
 // Check if using Cloudinary
 const isCloudinaryEnabled = () => {
@@ -30,64 +29,35 @@ const getFileUrl = (file) => {
 exports.createDocumentRequest = async (req, res) => {
   try {
     const payload = req.body || {};
-    console.log("📥 Document Request Payload:", payload);
-    console.log("📎 Uploaded Files:", req.files);
-
+    console.log('📥 Document Request Payload:', payload);
+    console.log('📎 Uploaded Files:', req.files);
+    
     // Handle uploaded files - build proper file objects for the model
     let photo1x1 = null;
     if (req.files?.photo1x1) {
       const file = req.files.photo1x1[0];
-      // Normalize path to use forward slashes for URL
-      const normalizedPath = file.path.replace(/\\/g, "/");
       photo1x1 = {
         url: getFileUrl(file),
         filename: file.filename || file.originalname,
         originalName: file.originalname,
         mimeType: file.mimetype,
-        fileSize: file.size,
+        fileSize: file.size
       };
-    } else if (payload.useStoredPhoto1x1 === "true" && req.user?._id) {
-      // Reuse stored photo from user profile
-      const userWithPhoto = await User.findById(req.user._id).select(
-        "photo1x1"
-      );
-      if (userWithPhoto?.photo1x1?.url) {
-        photo1x1 = userWithPhoto.photo1x1;
-        console.log("📸 Reusing stored photo1x1 from user profile");
-      }
     }
 
     let validID = null;
     if (req.files?.validID) {
       const file = req.files.validID[0];
-      // Normalize path to use forward slashes for URL
-      const normalizedPath = file.path.replace(/\\/g, "/");
       validID = {
         url: getFileUrl(file),
         filename: file.filename || file.originalname,
         originalName: file.originalname,
         mimeType: file.mimetype,
-        fileSize: file.size,
+        fileSize: file.size
       };
-    } else if (payload.useStoredValidID === "true" && req.user?._id) {
-      // Reuse stored valid ID from user profile
-      const userWithID = await User.findById(req.user._id).select("validID");
-      if (userWithID?.validID?.url) {
-        validID = userWithID.validID;
-        console.log("🪪 Reusing stored validID from user profile");
-      }
     }
 
     // Prepare data for document request
-    // Helper to safely convert to lowercase string - handles arrays and non-strings
-    const toLowerString = (val) => {
-      if (val == null) return undefined;
-      // If array, take first element (can happen with duplicate form fields)
-      const value = Array.isArray(val) ? val[0] : val;
-      if (value == null) return undefined;
-      return String(value).toLowerCase();
-    };
-
     const documentData = {
       applicant: req.user?._id,
       lastName: payload.lastName,
@@ -96,15 +66,14 @@ exports.createDocumentRequest = async (req, res) => {
       salutation: payload.salutation,
       dateOfBirth: payload.dateOfBirth,
       placeOfBirth: payload.placeOfBirth,
-      gender: toLowerString(payload.gender),
-      civilStatus: toLowerString(payload.civilStatus)?.replace(/\s+/g, "_"),
+      gender: payload.gender?.toLowerCase(),
+      civilStatus: payload.civilStatus?.toLowerCase().replace(/\s+/g, '_'),
       nationality: payload.nationality,
       address: payload.address || {},
       contactNumber: payload.contactNumber,
       emergencyContact: payload.emergencyContact || {},
       documentType: payload.documentType,
       purposeOfRequest: payload.purposeOfRequest,
-      requestFor: payload.requestFor || payload.purposeOfRequest, // Use purposeOfRequest if requestFor not provided
       preferredPickupDate: payload.preferredPickupDate,
       remarks: payload.remarks,
       photo1x1: photo1x1,
@@ -113,27 +82,9 @@ exports.createDocumentRequest = async (req, res) => {
       beneficiaryInfo: payload.beneficiaryInfo || {},
       // Business info (for business permits)
       businessInfo: payload.businessInfo || {},
-      // Residency info (for residency certificate)
-      residencyInfo: payload.residencyInfo || {},
-      // Barangay ID specific fields - use array-safe extraction
-      residencyType: Array.isArray(payload.residencyType)
-        ? payload.residencyType[0]
-        : payload.residencyType,
-      precinctNumber: Array.isArray(payload.precinctNumber)
-        ? payload.precinctNumber[0]
-        : payload.precinctNumber,
-      // Additional fields - use array-safe extraction
-      tinNumber: Array.isArray(payload.tinNumber)
-        ? payload.tinNumber[0]
-        : payload.tinNumber,
-      sssGsisNumber: Array.isArray(payload.sssGsisNumber)
-        ? payload.sssGsisNumber[0]
-        : payload.sssGsisNumber,
-      // Foreign national info (for missionary certificate)
-      foreignNationalInfo: payload.foreignNationalInfo || {},
     };
 
-    console.log("💾 Creating document request with data:", documentData);
+    console.log('💾 Creating document request with data:', documentData);
     const newRequest = await DocumentRequest.create(documentData);
 
     // Wrap photo fields as { url }
@@ -151,57 +102,14 @@ exports.createDocumentRequest = async (req, res) => {
       data: responseObj,
     });
 
-    // Save photo1x1 and validID to user profile for future reuse
-    // Only save if user exists and doesn't already have these documents stored
-    if (req.user?._id) {
-      try {
-        const updateData = {};
-
-        // Save photo1x1 to user profile if uploaded
-        if (photo1x1) {
-          updateData.photo1x1 = {
-            url: photo1x1.url,
-            filename: photo1x1.filename,
-            originalName: photo1x1.originalName,
-            mimeType: photo1x1.mimeType,
-            fileSize: photo1x1.fileSize,
-            uploadedAt: new Date(),
-          };
-        }
-
-        // Save validID to user profile if uploaded
-        if (validID) {
-          updateData.validID = {
-            url: validID.url,
-            filename: validID.filename,
-            originalName: validID.originalName,
-            mimeType: validID.mimeType,
-            fileSize: validID.fileSize,
-            uploadedAt: new Date(),
-          };
-        }
-
-        if (Object.keys(updateData).length > 0) {
-          await User.findByIdAndUpdate(req.user._id, { $set: updateData });
-          console.log("📂 Saved documents to user profile for future reuse");
-        }
-      } catch (profileError) {
-        // Don't fail the request if profile update fails
-        console.error(
-          "⚠️ Error saving documents to user profile:",
-          profileError
-        );
-      }
-    }
-
     await logAction(
       LOGCONSTANTS.actions.records.CREATE_RECORD,
       `Document request created: ${newRequest._id}`,
       req.user
     );
   } catch (error) {
-    console.error("❌ Error creating document request:", error);
-    console.error("Error stack:", error.stack);
+    console.error('❌ Error creating document request:', error);
+    console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
       message: "Error creating document request",
@@ -413,13 +321,6 @@ exports.updateRequestStatus = async (req, res) => {
       return res
         .status(404)
         .json({ success: false, message: "Document request not found" });
-    }
-
-    // Generate control number when approving (if not already set)
-    if (status === "approved" && !request.controlNumber) {
-      request.controlNumber = await DocumentRequest.generateControlNumber(
-        request.documentType
-      );
     }
 
     request.status = status;
