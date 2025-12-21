@@ -32,6 +32,10 @@ exports.createDocumentRequest = async (req, res) => {
     console.log('📥 Document Request Payload:', payload);
     console.log('📎 Uploaded Files:', req.files);
     
+    // Fetch user profile to get stored files if needed
+    const User = require('../models/User');
+    const userProfile = await User.findById(req.user._id).select('photo1x1 validID');
+    
     // Handle uploaded files - build proper file objects for the model
     let photo1x1 = null;
     if (req.files?.photo1x1) {
@@ -43,6 +47,16 @@ exports.createDocumentRequest = async (req, res) => {
         mimeType: file.mimetype,
         fileSize: file.size
       };
+    } else if (payload.useStoredPhoto1x1 === 'true' && userProfile?.photo1x1?.url) {
+      // Use stored photo from user profile
+      photo1x1 = {
+        url: userProfile.photo1x1.url,
+        filename: userProfile.photo1x1.filename,
+        originalName: userProfile.photo1x1.originalName,
+        mimeType: userProfile.photo1x1.mimeType,
+        fileSize: userProfile.photo1x1.fileSize
+      };
+      console.log('📎 Using stored photo1x1 from user profile');
     }
 
     let validID = null;
@@ -55,6 +69,24 @@ exports.createDocumentRequest = async (req, res) => {
         mimeType: file.mimetype,
         fileSize: file.size
       };
+    } else if (payload.useStoredValidID === 'true' && userProfile?.validID?.url) {
+      // Use stored valid ID from user profile
+      validID = {
+        url: userProfile.validID.url,
+        filename: userProfile.validID.filename,
+        originalName: userProfile.validID.originalName,
+        mimeType: userProfile.validID.mimeType,
+        fileSize: userProfile.validID.fileSize
+      };
+      console.log('📎 Using stored validID from user profile');
+    }
+
+    // Validate required files
+    if (!validID) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid ID is required. Please upload a valid ID or use your stored ID from your profile.",
+      });
     }
 
     // Prepare data for document request
