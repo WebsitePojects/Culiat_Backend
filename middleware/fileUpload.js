@@ -33,6 +33,7 @@ Object.values(uploadDirs).forEach(dir => {
 const getFolderForField = (fieldname) => {
   switch (fieldname) {
     case 'validID':
+    case 'backOfValidID':
       return 'validIDs';
     case 'photo1x1':
       return 'photos';

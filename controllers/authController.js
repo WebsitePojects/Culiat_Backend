@@ -104,6 +104,30 @@ exports.register = async (req, res) => {
       };
     }
 
+    // Handle backOfValidID file upload
+    let backOfValidIDData = null;
+    if (req.files && req.files.backOfValidID) {
+      const backOfValidID = req.files.backOfValidID[0];
+      
+      let fileUrl;
+      if (backOfValidID.path && backOfValidID.path.includes('cloudinary')) {
+        fileUrl = backOfValidID.path;
+      } else if (backOfValidID.secure_url) {
+        fileUrl = backOfValidID.secure_url;
+      } else {
+        fileUrl = `/uploads/validIDs/${backOfValidID.filename}`;
+      }
+      
+      backOfValidIDData = {
+        url: fileUrl,
+        filename: backOfValidID.filename || backOfValidID.public_id,
+        originalName: backOfValidID.originalname,
+        mimeType: backOfValidID.mimetype,
+        fileSize: backOfValidID.size,
+        uploadedAt: new Date(),
+      };
+    }
+
     // Handle birth certificate document upload
     let birthCertificateData = birthCertificate
       ? JSON.parse(birthCertificate)
@@ -136,8 +160,8 @@ exports.register = async (req, res) => {
       civilStatus,
       nationality,
       phoneNumber,
-      tinNumber,
-      sssGsisNumber,
+      tinNumber: tinNumber || "N/A",
+      sssGsisNumber: sssGsisNumber || "N/A",
       precinctNumber,
       religion,
       heightWeight,
@@ -148,6 +172,7 @@ exports.register = async (req, res) => {
       emergencyContact,
       birthCertificate: birthCertificateData,
       validID: validIDData,
+      backOfValidID: backOfValidIDData,
       role: 74934, // Resident role
       registrationStatus: "pending", // Pending admin approval
     });
@@ -195,7 +220,7 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Find user with password field
+    // Find user by username with password field
     const user = await User.findOne({ username }).select("+password");
 
     if (!user || !user.isActive) {
@@ -297,6 +322,7 @@ exports.getMe = async (req, res) => {
         birthCertificate: user.birthCertificate,
         // Stored documents for reuse
         validID: user.validID,
+        backOfValidID: user.backOfValidID,
         photo1x1: user.photo1x1,
         isActive: user.isActive,
         createdAt: user.createdAt,

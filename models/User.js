@@ -361,6 +361,37 @@ const userSchema = new mongoose.Schema(
         default: null,
       },
     },
+    // Back of Valid ID Upload (for registration verification)
+    backOfValidID: {
+      url: {
+        type: String,
+        trim: true,
+        default: null,
+      },
+      filename: {
+        type: String,
+        trim: true,
+        default: null,
+      },
+      originalName: {
+        type: String,
+        trim: true,
+        default: null,
+      },
+      mimeType: {
+        type: String,
+        enum: ["image/jpeg", "image/jpg", "image/png", null],
+        default: null,
+      },
+      fileSize: {
+        type: Number,
+        default: null,
+      },
+      uploadedAt: {
+        type: Date,
+        default: null,
+      },
+    },
     // 1x1 Photo Upload (for document requests - persisted for reuse)
     photo1x1: {
       url: {
