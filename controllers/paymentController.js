@@ -448,7 +448,6 @@ exports.webhook = async (req, res) => {
         }
 
         const event = req.body;
-        console.log('PayMongo Webhook received:', event.data?.attributes?.type);
 
         // Handle payment events
         if (event.data?.attributes?.type === 'link.payment.paid') {
@@ -465,7 +464,6 @@ exports.webhook = async (req, res) => {
                     documentRequest.paymentStatus = 'paid';
                     documentRequest.paidAt = new Date();
                     await documentRequest.save();
-                    console.log(`Payment confirmed via webhook for request: ${documentRequest._id}`);
                 }
             }
         }

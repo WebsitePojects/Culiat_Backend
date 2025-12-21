@@ -14,7 +14,6 @@ const axios = require("axios");
 const TEMP_DIR = path.join(__dirname, "..", "temp");
 if (!fs.existsSync(TEMP_DIR)) {
   fs.mkdirSync(TEMP_DIR, { recursive: true });
-  console.log("📁 Created temp directory for photo processing");
 }
 
 // Templates directory path
@@ -358,7 +357,7 @@ exports.generateDocumentFile = async (req, res) => {
         barangaySecretary = settings.officials.secretary || barangaySecretary;
       }
     } catch (err) {
-      console.log("Using default officials names");
+      // Using default officials names
     }
 
     // Build template data with ALL available placeholders
@@ -560,15 +559,11 @@ exports.generateDocumentFile = async (req, res) => {
       documentRequest.documentType === "residency" &&
       documentRequest.photo1x1?.url
     ) {
-      console.log("📸 Photo URL from DB:", documentRequest.photo1x1.url);
-
       const photoUrl = documentRequest.photo1x1.url;
       let photoPath = null;
 
       // Check if it's a Cloudinary URL (web URL)
       if (photoUrl.startsWith("http://") || photoUrl.startsWith("https://")) {
-        console.log("📸 Downloading image from Cloudinary...");
-        
         try {
           // Download the image from Cloudinary temporarily
           
@@ -602,13 +597,12 @@ exports.generateDocumentFile = async (req, res) => {
                 fs.unlinkSync(tempPath);
               }
             } catch (cleanupError) {
-              console.warn("⚠️ Error cleaning up temp file:", cleanupError.message);
+              // Silent cleanup failure
             }
           }, 60000); // Clean up after 1 minute
           
         } catch (downloadError) {
-          console.error("❌ Error downloading photo:", downloadError.message);
-          console.warn("⚠️ Will proceed without photo");
+          // Will proceed without photo
         }
       } else {
         // Handle local file paths (legacy support)
@@ -624,8 +618,6 @@ exports.generateDocumentFile = async (req, res) => {
 
       if (photoPath && fs.existsSync(photoPath)) {
         templateData.photo_1x1 = photoPath;
-      } else if (photoPath) {
-        console.warn("⚠️ Photo file not found at:", photoPath);
       }
     }
 

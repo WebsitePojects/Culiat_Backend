@@ -29,8 +29,6 @@ const getFileUrl = (file) => {
 exports.createDocumentRequest = async (req, res) => {
   try {
     const payload = req.body || {};
-    console.log('📥 Document Request Payload:', payload);
-    console.log('📎 Uploaded Files:', req.files);
     
     // Fetch user profile to get stored files if needed
     const User = require('../models/User');
@@ -56,7 +54,6 @@ exports.createDocumentRequest = async (req, res) => {
         mimeType: userProfile.photo1x1.mimeType,
         fileSize: userProfile.photo1x1.fileSize
       };
-      console.log('📎 Using stored photo1x1 from user profile');
     }
 
     let validID = null;
@@ -78,7 +75,6 @@ exports.createDocumentRequest = async (req, res) => {
         mimeType: userProfile.validID.mimeType,
         fileSize: userProfile.validID.fileSize
       };
-      console.log('📎 Using stored validID from user profile');
     }
 
     // Validate required files
@@ -116,7 +112,6 @@ exports.createDocumentRequest = async (req, res) => {
       businessInfo: payload.businessInfo || {},
     };
 
-    console.log('💾 Creating document request with data:', documentData);
     const newRequest = await DocumentRequest.create(documentData);
 
     // Wrap photo fields as { url }
@@ -140,8 +135,6 @@ exports.createDocumentRequest = async (req, res) => {
       req.user
     );
   } catch (error) {
-    console.error('❌ Error creating document request:', error);
-    console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
       message: "Error creating document request",
