@@ -47,17 +47,16 @@ const getFolderForField = (fieldname) => {
   }
 };
 
-// Cloudinary storage configuration
+// Cloudinary storage configuration (v2.x API)
 const cloudinaryStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
     const folder = getFolderForField(file.fieldname);
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     const fieldname = file.fieldname || 'file';
-    
     return {
       folder: `culiat-barangay/${folder}`,
-      allowed_formats: ['jpg', 'jpeg', 'png'],
+      format: ['jpg', 'jpeg', 'png'],
       transformation: [{ quality: 'auto' }],
       public_id: `${fieldname}-${uniqueSuffix}`
     };
