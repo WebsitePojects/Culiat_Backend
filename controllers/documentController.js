@@ -38,7 +38,11 @@ const TEMPLATE_MAP = {
   rehab: "Certificate for Rehab.docx",
 };
 
-// Document prices (in PHP)
+// PayMongo commission rate for GCash (2.5%)
+const PAYMONGO_COMMISSION_RATE = 0.025;
+const MINIMUM_PAYMENT_AMOUNT = 50; // Minimum 50 PHP using PaymentIntents API
+
+// Document prices (in PHP) - Base prices that barangay receives
 const DOCUMENT_PRICES = {
   indigency: 0, // Free for indigent residents
   residency: 50,
@@ -52,6 +56,26 @@ const DOCUMENT_PRICES = {
   rehab: 50,
   ctc: 50,
   building_permit: 500,
+};
+
+/**
+ * Calculate total amount including PayMongo commission
+ * @param {number} basePrice - Base price that barangay receives
+ * @returns {number} Total amount customer pays (including commission)
+ */
+const calculateTotalWithCommission = (basePrice) => {
+  if (basePrice === 0) return 0; // Free documents remain free
+  
+  // Calculate amount with commission added
+  let totalAmount = basePrice * (1 + PAYMONGO_COMMISSION_RATE);
+  
+  // Ensure minimum payment of 50 PHP
+  if (totalAmount < MINIMUM_PAYMENT_AMOUNT) {
+    totalAmount = MINIMUM_PAYMENT_AMOUNT;
+  }
+  
+  // Round to 2 decimal places
+  return Math.round(totalAmount * 100) / 100;
 };
 
 // ============================================================================
