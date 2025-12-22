@@ -36,10 +36,6 @@ const generateToken = (id) => {
 // @access  Public
 exports.register = async (req, res) => {
   try {
-    console.log("=== REGISTRATION REQUEST RECEIVED ===");
-    console.log("Request Body:", JSON.stringify(req.body, null, 2));
-    console.log("Request Files:", req.files);
-
     const {
       // Account credentials
       username,
@@ -74,36 +70,19 @@ exports.register = async (req, res) => {
       birthCertificate,
     } = req.body;
 
-    console.log("Extracted data:", {
-      username,
-      email,
-      firstName,
-      lastName,
-      address,
-      emergencyContact,
-      birthCertificate,
-    });
-
     // Check if user already exists
-    console.log("Checking if user exists...");
     const userExists = await User.findOne({ $or: [{ email }, { username }] });
     if (userExists) {
-      console.log("User already exists:", userExists.username);
       return res.status(400).json({
         success: false,
         message: "User already exists with this email or username",
       });
     }
-    console.log("User does not exist, proceeding...");
 
     // Handle validID file upload
     let validIDData = null;
     if (req.files && req.files.validID) {
-      console.log("Processing validID file...");
       const validID = req.files.validID[0];
-      
-      // Log the full file object to see what Cloudinary returns
-      console.log("ValidID file object:", JSON.stringify(validID, null, 2));
       
       // Cloudinary returns the full URL in file.path, but also check file.secure_url
       let fileUrl;
@@ -123,9 +102,30 @@ exports.register = async (req, res) => {
         fileSize: validID.size,
         uploadedAt: new Date(),
       };
-      console.log("ValidID data:", validIDData);
-    } else {
-      console.log("No validID file found in request");
+    }
+
+    // Handle backOfValidID file upload
+    let backOfValidIDData = null;
+    if (req.files && req.files.backOfValidID) {
+      const backOfValidID = req.files.backOfValidID[0];
+      
+      let fileUrl;
+      if (backOfValidID.path && backOfValidID.path.includes('cloudinary')) {
+        fileUrl = backOfValidID.path;
+      } else if (backOfValidID.secure_url) {
+        fileUrl = backOfValidID.secure_url;
+      } else {
+        fileUrl = `/uploads/validIDs/${backOfValidID.filename}`;
+      }
+      
+      backOfValidIDData = {
+        url: fileUrl,
+        filename: backOfValidID.filename || backOfValidID.public_id,
+        originalName: backOfValidID.originalname,
+        mimeType: backOfValidID.mimetype,
+        fileSize: backOfValidID.size,
+        uploadedAt: new Date(),
+      };
     }
 
     // Handle birth certificate document upload
@@ -133,7 +133,6 @@ exports.register = async (req, res) => {
       ? JSON.parse(birthCertificate)
       : {};
     if (req.files && req.files.birthCertificateDoc) {
-      console.log("Processing birth certificate document...");
       const birthCertDoc = req.files.birthCertificateDoc[0];
       
       // Check if Cloudinary URL exists
@@ -144,11 +143,9 @@ exports.register = async (req, res) => {
       birthCertificateData.documentUrl = docUrl;
       birthCertificateData.documentFilename = birthCertDoc.filename || birthCertDoc.public_id;
       birthCertificateData.documentUploadedAt = new Date();
-      console.log("Birth certificate document data:", birthCertificateData);
     }
 
     // Create user with all fields
-    console.log("Creating user in database...");
     const user = await User.create({
       username,
       email,
@@ -163,8 +160,8 @@ exports.register = async (req, res) => {
       civilStatus,
       nationality,
       phoneNumber,
-      tinNumber,
-      sssGsisNumber,
+      tinNumber: tinNumber || "N/A",
+      sssGsisNumber: sssGsisNumber || "N/A",
       precinctNumber,
       religion,
       heightWeight,
@@ -175,11 +172,10 @@ exports.register = async (req, res) => {
       emergencyContact,
       birthCertificate: birthCertificateData,
       validID: validIDData,
+      backOfValidID: backOfValidIDData,
       role: 74934, // Resident role
       registrationStatus: "pending", // Pending admin approval
     });
-
-    console.log("User created successfully:", user._id);
 
     res.status(201).json({
       success: true,
@@ -194,19 +190,13 @@ exports.register = async (req, res) => {
       },
     });
 
-    console.log("Creating audit log...");
     // Create audit log for account creation
     await logAction(
       LOGCONSTANTS.actions.user.CREATE_USER,
       `New resident registration: ${user._id} (${user.email}) - Pending approval`,
       user
     );
-    console.log("Registration complete!");
   } catch (error) {
-    console.error("=== REGISTRATION ERROR ===");
-    console.error("Error message:", error.message);
-    console.error("Error stack:", error.stack);
-    console.error("Full error:", error);
     res.status(500).json({
       success: false,
       message: "Error registering user",
@@ -230,7 +220,7 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Find user with password field
+    // Find user by username with password field
     const user = await User.findOne({ username }).select("+password");
 
     if (!user || !user.isActive) {
@@ -332,6 +322,7 @@ exports.getMe = async (req, res) => {
         birthCertificate: user.birthCertificate,
         // Stored documents for reuse
         validID: user.validID,
+        backOfValidID: user.backOfValidID,
         photo1x1: user.photo1x1,
         isActive: user.isActive,
         createdAt: user.createdAt,
@@ -789,8 +780,6 @@ exports.forgotPassword = async (req, res) => {
       // });
 
       // Since we don't have an email service set up, we'll just return the token for testing
-      console.log(`Reset Token for ${user.email}: ${resetToken}`);
-
       res
         .status(200)
         .json({ success: true, data: "Email Sent", testToken: resetToken });

@@ -8,6 +8,13 @@ const { LOGCONSTANTS } = require("../config/logConstants");
 const { logAction } = require("../utils/logHelper");
 const path = require("path");
 const fs = require("fs");
+const axios = require("axios");
+
+// Ensure temp directory exists for photo downloads
+const TEMP_DIR = path.join(__dirname, "..", "temp");
+if (!fs.existsSync(TEMP_DIR)) {
+  fs.mkdirSync(TEMP_DIR, { recursive: true });
+}
 
 // Templates directory path
 const TEMPLATES_DIR = path.join(
@@ -31,7 +38,11 @@ const TEMPLATE_MAP = {
   rehab: "Certificate for Rehab.docx",
 };
 
-// Document prices (in PHP)
+// PayMongo commission rate for GCash (2.5%)
+const PAYMONGO_COMMISSION_RATE = 0.025;
+const MINIMUM_PAYMENT_AMOUNT = 50; // Minimum 50 PHP using PaymentIntents API
+
+// Document prices (in PHP) - Base prices that barangay receives
 const DOCUMENT_PRICES = {
   indigency: 0, // Free for indigent residents
   residency: 50,
@@ -45,6 +56,26 @@ const DOCUMENT_PRICES = {
   rehab: 50,
   ctc: 50,
   building_permit: 500,
+};
+
+/**
+ * Calculate total amount including PayMongo commission
+ * @param {number} basePrice - Base price that barangay receives
+ * @returns {number} Total amount customer pays (including commission)
+ */
+const calculateTotalWithCommission = (basePrice) => {
+  if (basePrice === 0) return 0; // Free documents remain free
+  
+  // Calculate amount with commission added
+  let totalAmount = basePrice * (1 + PAYMONGO_COMMISSION_RATE);
+  
+  // Ensure minimum payment of 50 PHP
+  if (totalAmount < MINIMUM_PAYMENT_AMOUNT) {
+    totalAmount = MINIMUM_PAYMENT_AMOUNT;
+  }
+  
+  // Round to 2 decimal places
+  return Math.round(totalAmount * 100) / 100;
 };
 
 // ============================================================================
@@ -350,7 +381,7 @@ exports.generateDocumentFile = async (req, res) => {
         barangaySecretary = settings.officials.secretary || barangaySecretary;
       }
     } catch (err) {
-      console.log("Using default officials names");
+      // Using default officials names
     }
 
     // Build template data with ALL available placeholders
@@ -552,25 +583,65 @@ exports.generateDocumentFile = async (req, res) => {
       documentRequest.documentType === "residency" &&
       documentRequest.photo1x1?.url
     ) {
-      console.log("📸 Photo URL from DB:", documentRequest.photo1x1.url);
+      const photoUrl = documentRequest.photo1x1.url;
+      let photoPath = null;
 
-      // Convert URL to file path - handle various URL formats
-      let photoPath = documentRequest.photo1x1.url;
-      if (photoPath.startsWith("/uploads")) {
-        photoPath = path.join(__dirname, "..", photoPath);
-      } else if (photoPath.startsWith("uploads")) {
-        photoPath = path.join(__dirname, "..", photoPath);
-      } else if (!path.isAbsolute(photoPath)) {
-        photoPath = path.join(__dirname, "..", photoPath);
+      // Check if it's a Cloudinary URL (web URL)
+      if (photoUrl.startsWith("http://") || photoUrl.startsWith("https://")) {
+        try {
+          // Download the image from Cloudinary temporarily
+          
+          // Generate a unique temp filename
+          const tempFileName = `temp_photo_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.jpg`;
+          const tempPath = path.join(TEMP_DIR, tempFileName);
+          
+          // Download the image
+          const response = await axios({
+            method: 'GET',
+            url: photoUrl,
+            responseType: 'stream'
+          });
+          
+          // Save to temp file
+          const writer = fs.createWriteStream(tempPath);
+          response.data.pipe(writer);
+          
+          // Wait for download to complete
+          await new Promise((resolve, reject) => {
+            writer.on('finish', resolve);
+            writer.on('error', reject);
+          });
+          
+          photoPath = tempPath;
+          
+          // Clean up temp file after some time (optional cleanup in background)
+          setTimeout(() => {
+            try {
+              if (fs.existsSync(tempPath)) {
+                fs.unlinkSync(tempPath);
+              }
+            } catch (cleanupError) {
+              // Silent cleanup failure
+            }
+          }, 60000); // Clean up after 1 minute
+          
+        } catch (downloadError) {
+          // Will proceed without photo
+        }
+      } else {
+        // Handle local file paths (legacy support)
+        photoPath = photoUrl;
+        if (photoPath.startsWith("/uploads")) {
+          photoPath = path.join(__dirname, "..", photoPath);
+        } else if (photoPath.startsWith("uploads")) {
+          photoPath = path.join(__dirname, "..", photoPath);
+        } else if (!path.isAbsolute(photoPath)) {
+          photoPath = path.join(__dirname, "..", photoPath);
+        }
       }
 
-      console.log("📸 Resolved photo path:", photoPath);
-      console.log("📸 Photo exists:", fs.existsSync(photoPath));
-
-      if (fs.existsSync(photoPath)) {
+      if (photoPath && fs.existsSync(photoPath)) {
         templateData.photo_1x1 = photoPath;
-      } else {
-        console.warn("⚠️ Photo file not found at:", photoPath);
       }
     }
 

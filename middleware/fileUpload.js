@@ -18,6 +18,8 @@ const uploadDirs = {
   documents: 'uploads/documents',
   photos: 'uploads/photos',
   achievements: 'uploads/achievements',
+  officials: 'uploads/officials',
+  barangay: 'uploads/barangay',
 };
 
 // Create local directories if they don't exist (for fallback)
@@ -31,6 +33,7 @@ Object.values(uploadDirs).forEach(dir => {
 const getFolderForField = (fieldname) => {
   switch (fieldname) {
     case 'validID':
+    case 'backOfValidID':
       return 'validIDs';
     case 'photo1x1':
       return 'photos';
@@ -42,6 +45,11 @@ const getFolderForField = (fieldname) => {
       return 'achievements';
     case 'birthCertificateDoc':
       return 'documents';
+    case 'officialPhoto':
+      return 'officials';
+    case 'logo':
+    case 'coverPhoto':
+      return 'barangay';
     default:
       return 'proofs';
   }

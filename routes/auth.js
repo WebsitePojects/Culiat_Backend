@@ -21,7 +21,10 @@ const upload = require("../middleware/fileUpload");
 
 router.post(
   "/register",
-  upload.fields([{ name: "validID", maxCount: 1 }]),
+  upload.fields([
+    { name: "validID", maxCount: 1 },
+    { name: "backOfValidID", maxCount: 1 }
+  ]),
   register
 );
 router.post(

@@ -8,10 +8,18 @@ const {
   updateDocumentRequest,
   updateRequestStatus,
   deleteDocumentRequest,
+  getDocumentHistory,
+  getDocumentStats,
+  getDocumentPayments,
 } = require('../controllers/documentRequestController');
 const { protect, authorize } = require('../middleware/auth');
 const upload = require('../middleware/fileUpload');
 const ROLES = require('../config/roles');
+
+// Admin-only routes (stats and history first to avoid conflict with :id)
+router.get('/history', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), getDocumentHistory);
+router.get('/stats', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), getDocumentStats);
+router.get('/payments', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), getDocumentPayments);
 
 router.post('/', protect, upload.fields([
   { name: 'photo1x1', maxCount: 1 },

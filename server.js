@@ -50,6 +50,10 @@ app.use("/api/faqs", require("./routes/faqsRoute"));
 // Document generation routes
 app.use("/api/documents", require("./routes/documentRoutes"));
 
+// Contact messages/feedback routes
+app.use("/api/contact-messages", require("./routes/contactMessagesRoute"));
+app.use("/api/feedback", require("./routes/contactMessagesRoute")); // Alias for frontend
+
 
 // Health check route
 app.get("/api/health", (req, res) => {
