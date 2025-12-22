@@ -1,8 +1,7 @@
 ﻿const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const MulterStorageCloudinary = require('multer-storage-cloudinary');
-const CloudinaryStorage = MulterStorageCloudinary.CloudinaryStorage;
+
 const { cloudinary } = require('../config/cloudinary');
 
 // Check if Cloudinary is configured
@@ -48,21 +47,25 @@ const getFolderForField = (fieldname) => {
   }
 };
 
-// Cloudinary storage configuration (v2.x API)
-const cloudinaryStorage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: async (req, file) => {
-    const folder = getFolderForField(file.fieldname);
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const fieldname = file.fieldname || 'file';
-    return {
-      folder: `culiat-barangay/${folder}`,
-      format: ['jpg', 'jpeg', 'png'],
-      transformation: [{ quality: 'auto' }],
-      public_id: `${fieldname}-${uniqueSuffix}`
-    };
-  }
-});
+
+// Dynamic import for multer-storage-cloudinary (ESM-only)
+async function getCloudinaryStorage(fieldname) {
+  const { CloudinaryStorage } = await import('multer-storage-cloudinary');
+  return new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: async (req, file) => {
+      const folder = getFolderForField(file.fieldname);
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      const field = file.fieldname || 'file';
+      return {
+        folder: `culiat-barangay/${folder}`,
+        format: ['jpg', 'jpeg', 'png'],
+        transformation: [{ quality: 'auto' }],
+        public_id: `${field}-${uniqueSuffix}`
+      };
+    }
+  });
+}
 
 // Local disk storage configuration (fallback)
 const diskStorage = multer.diskStorage({
@@ -90,23 +93,24 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-// Choose storage based on environment configuration
-const storage = isCloudinaryConfigured() ? cloudinaryStorage : diskStorage;
 
-// Log which storage is being used
-if (isCloudinaryConfigured()) {
-  console.log('📁 Using Cloudinary for file storage');
-} else {
-  console.log('📁 Using local disk storage (Cloudinary not configured)');
+// Export an async function to get the upload middleware
+async function getUploadMiddleware() {
+  let storage;
+  if (isCloudinaryConfigured()) {
+    storage = await getCloudinaryStorage();
+    console.log('📁 Using Cloudinary for file storage');
+  } else {
+    storage = diskStorage;
+    console.log('📁 Using local disk storage (Cloudinary not configured)');
+  }
+  return multer({
+    storage: storage,
+    limits: {
+      fileSize: 5 * 1024 * 1024 // 5MB
+    },
+    fileFilter: fileFilter
+  });
 }
 
-// Create multer upload instance
-const upload = multer({
-  storage: storage,
-  limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB
-  },
-  fileFilter: fileFilter
-});
-
-module.exports = upload;
+module.exports = { getUploadMiddleware };
