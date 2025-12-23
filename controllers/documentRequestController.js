@@ -818,7 +818,7 @@ function getDocumentLabel(documentType) {
     residency: "Certificate of Residency",
     clearance: "Barangay Clearance",
     business_permit: "Business Permit",
-    business_clearance: "Business Clearance",
+    business_clearance: "Business Closure",
     good_moral: "Good Moral Certificate",
     barangay_id: "Barangay ID",
     liquor_permit: "Liquor Permit",
