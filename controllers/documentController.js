@@ -44,18 +44,18 @@ const MINIMUM_PAYMENT_AMOUNT = 50; // Minimum 50 PHP using PaymentIntents API
 
 // Document prices (in PHP) - Base prices that barangay receives
 const DOCUMENT_PRICES = {
-  indigency: 0, // Free for indigent residents
-  residency: 50,
+  indigency: 100,
+  residency: 100,
   clearance: 100,
-  business_permit: 500,
-  business_clearance: 200,
-  good_moral: 75,
-  barangay_id: 150,
-  liquor_permit: 300,
-  missionary: 50,
-  rehab: 50,
-  ctc: 50,
-  building_permit: 500,
+  business_permit: 100,
+  business_clearance: 100,
+  good_moral: 100,
+  barangay_id: 100,
+  liquor_permit: 100,
+  missionary: 100,
+  rehab: 100,
+  ctc: 100,
+  building_permit: 100,
 };
 
 /**

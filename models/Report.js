@@ -29,6 +29,9 @@ const reportSchema = new mongoose.Schema({
     type: String,
     trim: true,
   },
+  images: [{
+    type: String,
+  }],
   reportedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',

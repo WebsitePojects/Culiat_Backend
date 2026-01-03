@@ -6,7 +6,8 @@ const { cloudinary } = require('../config/cloudinary');
 
 // Check if Cloudinary is configured
 const isCloudinaryConfigured = () => {
-  return process.env.CLOUDINARY_CLOUD_NAME && 
+  return cloudinary && 
+         process.env.CLOUDINARY_CLOUD_NAME && 
          process.env.CLOUDINARY_API_KEY && 
          process.env.CLOUDINARY_API_SECRET;
 };
@@ -20,6 +21,8 @@ const uploadDirs = {
   achievements: 'uploads/achievements',
   officials: 'uploads/officials',
   barangay: 'uploads/barangay',
+  reports: 'uploads/reports',
+  announcements: 'uploads/announcements',
 };
 
 // Create local directories if they don't exist (for fallback)
@@ -50,6 +53,11 @@ const getFolderForField = (fieldname) => {
     case 'logo':
     case 'coverPhoto':
       return 'barangay';
+    case 'reportImages':
+      return 'reports';
+    case 'announcementImage':
+    case 'image':
+      return 'announcements';
     default:
       return 'proofs';
   }
@@ -71,6 +79,55 @@ const storage = new CloudinaryStorage({
   }
 });
 
-const upload = multer({ storage });
+// Local disk storage configuration (fallback)
+const diskStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const folder = getFolderForField(file.fieldname);
+    cb(null, uploadDirs[folder] || uploadDirs.proofs);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const prefix = file.fieldname || 'file';
+    cb(null, prefix + '-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
 
-module.exports = upload;
+// File filter to accept only images (JPG, JPEG, PNG only for strict validation)
+const fileFilter = (req, file, cb) => {
+  const allowedTypes = /jpeg|jpg|png/;
+  const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+  const mimetype = allowedTypes.test(file.mimetype);
+
+  if (mimetype && extname) {
+    return cb(null, true);
+  } else {
+    cb(new Error('Only JPG, JPEG, and PNG files are allowed'));
+  }
+};
+
+// Choose storage based on environment configuration
+let storage;
+try {
+  storage = isCloudinaryConfigured() ? cloudinaryStorage : diskStorage;
+} catch (error) {
+  console.log('📁 Cloudinary initialization failed, using local disk storage');
+  storage = diskStorage;
+}
+
+// Log which storage is being used
+if (isCloudinaryConfigured()) {
+  console.log('📁 Using Cloudinary for file storage');
+} else {
+  console.log('📁 Using local disk storage (Cloudinary not configured)');
+}
+
+// Create multer upload instance
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB
+  },
+  fileFilter: fileFilter
+});
+
+module.exports = { upload };

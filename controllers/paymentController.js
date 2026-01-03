@@ -15,38 +15,18 @@ const MINIMUM_PAYMENT_AMOUNT = 50; // Minimum 50 PHP using PaymentIntents API (â
 
 // Document prices (in PHP) - Base prices that barangay receives
 const DOCUMENT_PRICES = {
-  indigency: 0, // Free for indigent residents
-  residency: 50,
-  clearance: 100,
-  business_permit: 500,
-  business_clearance: 200,
-  good_moral: 75,
-  barangay_id: 150,
-  liquor_permit: 300,
-  missionary: 50,
-  rehab: 50,
-  ctc: 50,
-  building_permit: 500,
-};
-
-/**
- * Calculate total amount including PayMongo commission
- * @param {number} basePrice - Base price that barangay receives
- * @returns {number} Total amount customer pays (including commission)
- */
-const calculateTotalWithCommission = (basePrice) => {
-  if (basePrice === 0) return 0; // Free documents remain free
-
-  // Add 2.5% commission on top of base price
-  let totalAmount = basePrice * (1 + PAYMONGO_COMMISSION_RATE);
-
-  // Ensure minimum payment of 50 PHP
-  if (totalAmount < MINIMUM_PAYMENT_AMOUNT) {
-    totalAmount = MINIMUM_PAYMENT_AMOUNT;
-  }
-
-  // Round to 2 decimal places
-  return Math.round(totalAmount * 100) / 100;
+    'indigency': 100,
+    'residency': 100,
+    'clearance': 100,
+    'business_permit': 100,
+    'business_clearance': 100,
+    'good_moral': 100,
+    'barangay_id': 100,
+    'liquor_permit': 100,
+    'missionary': 100,
+    'rehab': 100,
+    'ctc': 100,
+    'building_permit': 100,
 };
 
 // Document type labels
@@ -188,13 +168,25 @@ exports.createPaymentLink = async (req, res) => {
       });
     }
 
-    // Check if request is approved
-    if (documentRequest.status !== "approved") {
-      return res.status(400).json({
-        success: false,
-        message: "Only approved requests can be paid",
-      });
-    }
+        const amount = price * 100; // Convert to centavos
+        const documentLabel = DOCUMENT_LABELS[documentRequest.documentType] || documentRequest.documentType;
+        const description = `Payment for ${documentLabel} - Request #${documentRequest._id}`;
+
+        // Configure payment link to only accept GCash
+        const payload = {
+            data: {
+                attributes: {
+                    amount: amount,
+                    description: description,
+                    remarks: `Document Request ID: ${documentRequest._id}`,
+                    payment_method_types: ['gcash'], // Only allow GCash payments
+                }
+            }
+        };
+
+        const response = await axios.post(`${PAYMONGO_API_URL}/links`, payload, {
+            headers: getHeaders()
+        });
 
     if (documentRequest.paymentStatus === "paid") {
       return res.status(400).json({

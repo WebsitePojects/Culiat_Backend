@@ -13,7 +13,7 @@ const {
   getDocumentPayments,
 } = require('../controllers/documentRequestController');
 const { protect, authorize } = require('../middleware/auth');
-const upload = require('../middleware/fileUpload');
+const { upload } = require('../middleware/fileUpload');
 const ROLES = require('../config/roles');
 
 // Admin-only routes (stats and history first to avoid conflict with :id)
