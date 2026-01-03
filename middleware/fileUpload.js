@@ -36,6 +36,7 @@ Object.values(uploadDirs).forEach(dir => {
 const getFolderForField = (fieldname) => {
   switch (fieldname) {
     case 'validID':
+    case 'backOfValidID':
       return 'validIDs';
     case 'photo1x1':
       return 'photos';
@@ -62,19 +63,18 @@ const getFolderForField = (fieldname) => {
   }
 };
 
-// Cloudinary storage configuration
-const cloudinaryStorage = new CloudinaryStorage({
+// Configure Cloudinary storage
+const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
     const folder = getFolderForField(file.fieldname);
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const fieldname = file.fieldname || 'file';
-    
+    const field = file.fieldname || 'file';
     return {
       folder: `culiat-barangay/${folder}`,
-      allowed_formats: ['jpg', 'jpeg', 'png'],
+      format: 'jpg',
       transformation: [{ quality: 'auto' }],
-      public_id: `${fieldname}-${uniqueSuffix}`
+      public_id: `${field}-${uniqueSuffix}`
     };
   }
 });

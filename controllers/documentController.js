@@ -38,7 +38,11 @@ const TEMPLATE_MAP = {
   rehab: "Certificate for Rehab.docx",
 };
 
-// Document prices (in PHP)
+// PayMongo commission rate for GCash (2.5%)
+const PAYMONGO_COMMISSION_RATE = 0.025;
+const MINIMUM_PAYMENT_AMOUNT = 50; // Minimum 50 PHP using PaymentIntents API
+
+// Document prices (in PHP) - Base prices that barangay receives
 const DOCUMENT_PRICES = {
   indigency: 100,
   residency: 100,
@@ -52,6 +56,26 @@ const DOCUMENT_PRICES = {
   rehab: 100,
   ctc: 100,
   building_permit: 100,
+};
+
+/**
+ * Calculate total amount including PayMongo commission
+ * @param {number} basePrice - Base price that barangay receives
+ * @returns {number} Total amount customer pays (including commission)
+ */
+const calculateTotalWithCommission = (basePrice) => {
+  if (basePrice === 0) return 0; // Free documents remain free
+
+  // Calculate amount with commission added
+  let totalAmount = basePrice * (1 + PAYMONGO_COMMISSION_RATE);
+
+  // Ensure minimum payment of 50 PHP
+  if (totalAmount < MINIMUM_PAYMENT_AMOUNT) {
+    totalAmount = MINIMUM_PAYMENT_AMOUNT;
+  }
+
+  // Round to 2 decimal places
+  return Math.round(totalAmount * 100) / 100;
 };
 
 // ============================================================================
@@ -566,30 +590,32 @@ exports.generateDocumentFile = async (req, res) => {
       if (photoUrl.startsWith("http://") || photoUrl.startsWith("https://")) {
         try {
           // Download the image from Cloudinary temporarily
-          
+
           // Generate a unique temp filename
-          const tempFileName = `temp_photo_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.jpg`;
+          const tempFileName = `temp_photo_${Date.now()}_${Math.random()
+            .toString(36)
+            .substr(2, 9)}.jpg`;
           const tempPath = path.join(TEMP_DIR, tempFileName);
-          
+
           // Download the image
           const response = await axios({
-            method: 'GET',
+            method: "GET",
             url: photoUrl,
-            responseType: 'stream'
+            responseType: "stream",
           });
-          
+
           // Save to temp file
           const writer = fs.createWriteStream(tempPath);
           response.data.pipe(writer);
-          
+
           // Wait for download to complete
           await new Promise((resolve, reject) => {
-            writer.on('finish', resolve);
-            writer.on('error', reject);
+            writer.on("finish", resolve);
+            writer.on("error", reject);
           });
-          
+
           photoPath = tempPath;
-          
+
           // Clean up temp file after some time (optional cleanup in background)
           setTimeout(() => {
             try {
@@ -600,7 +626,6 @@ exports.generateDocumentFile = async (req, res) => {
               // Silent cleanup failure
             }
           }, 60000); // Clean up after 1 minute
-          
         } catch (downloadError) {
           // Will proceed without photo
         }

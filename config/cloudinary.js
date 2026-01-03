@@ -1,5 +1,6 @@
 const cloudinary = require('cloudinary').v2;
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const MulterStorageCloudinary = require('multer-storage-cloudinary');
+const CloudinaryStorage = MulterStorageCloudinary.CloudinaryStorage;
 
 // Configure Cloudinary with environment variables
 cloudinary.config({
@@ -9,19 +10,19 @@ cloudinary.config({
 });
 
 // Create storage configurations for different upload types
+
 const createCloudinaryStorage = (folder) => {
   return new CloudinaryStorage({
     cloudinary: cloudinary,
-    params: {
-      folder: `culiat-barangay/${folder}`,
-      allowed_formats: ['jpg', 'jpeg', 'png'],
-      transformation: [{ quality: 'auto' }],
-      // Generate a unique public_id
-      public_id: (req, file) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        const fieldname = file.fieldname || 'file';
-        return `${fieldname}-${uniqueSuffix}`;
-      }
+    params: async (req, file) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      const fieldname = file.fieldname || 'file';
+      return {
+        folder: `culiat-barangay/${folder}`,
+        format: ['jpg', 'jpeg', 'png'],
+        transformation: [{ quality: 'auto' }],
+        public_id: `${fieldname}-${uniqueSuffix}`
+      };
     }
   });
 };

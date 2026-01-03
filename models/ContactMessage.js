@@ -37,6 +37,13 @@ const contactMessageSchema = new mongoose.Schema({
     trim: true,
     maxlength: [2000, 'Message cannot exceed 2000 characters'],
   },
+  // Star rating (1-5)
+  rating: {
+    type: Number,
+    min: [1, 'Rating must be at least 1'],
+    max: [5, 'Rating cannot exceed 5'],
+    default: null,
+  },
   category: {
     type: String,
     enum: [
@@ -44,6 +51,7 @@ const contactMessageSchema = new mongoose.Schema({
       'document_request',
       'complaint',
       'suggestion',
+      'feedback',
       'emergency',
       'other'
     ],
