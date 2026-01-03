@@ -11,6 +11,7 @@ const {
   addResponse,
   addInternalNote,
   markAsSpam,
+  blockIP,
   toggleArchive,
   deleteContactMessage,
   getMessagesStats,
@@ -23,8 +24,8 @@ router.post('/', submitContactMessage); // Can be used by logged in or anonymous
 
 // Admin routes
 router.get('/', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), getAllContactMessages);
+router.get('/stats', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), getMessagesStats);
 router.get('/status/:status', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), getMessagesByStatus);
-router.get('/stats/all', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), getMessagesStats);
 router.get('/:id', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), getContactMessage);
 router.put('/:id/status', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), updateStatus);
 router.put('/:id/priority', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), updatePriority);
@@ -32,6 +33,7 @@ router.put('/:id/assign', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), ass
 router.post('/:id/response', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), addResponse);
 router.post('/:id/note', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), addInternalNote);
 router.put('/:id/spam', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), markAsSpam);
+router.put('/block-ip', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), blockIP);
 router.put('/:id/archive', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), toggleArchive);
 router.delete('/:id', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), deleteContactMessage);
 
