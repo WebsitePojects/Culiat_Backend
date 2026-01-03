@@ -6,7 +6,8 @@ const { cloudinary } = require('../config/cloudinary');
 
 // Check if Cloudinary is configured
 const isCloudinaryConfigured = () => {
-  return process.env.CLOUDINARY_CLOUD_NAME && 
+  return cloudinary && 
+         process.env.CLOUDINARY_CLOUD_NAME && 
          process.env.CLOUDINARY_API_KEY && 
          process.env.CLOUDINARY_API_SECRET;
 };
@@ -20,6 +21,8 @@ const uploadDirs = {
   achievements: 'uploads/achievements',
   officials: 'uploads/officials',
   barangay: 'uploads/barangay',
+  reports: 'uploads/reports',
+  announcements: 'uploads/announcements',
 };
 
 // Create local directories if they don't exist (for fallback)
@@ -49,6 +52,11 @@ const getFolderForField = (fieldname) => {
     case 'logo':
     case 'coverPhoto':
       return 'barangay';
+    case 'reportImages':
+      return 'reports';
+    case 'announcementImage':
+    case 'image':
+      return 'announcements';
     default:
       return 'proofs';
   }
@@ -98,7 +106,13 @@ const fileFilter = (req, file, cb) => {
 };
 
 // Choose storage based on environment configuration
-const storage = isCloudinaryConfigured() ? cloudinaryStorage : diskStorage;
+let storage;
+try {
+  storage = isCloudinaryConfigured() ? cloudinaryStorage : diskStorage;
+} catch (error) {
+  console.log('📁 Cloudinary initialization failed, using local disk storage');
+  storage = diskStorage;
+}
 
 // Log which storage is being used
 if (isCloudinaryConfigured()) {
@@ -116,4 +130,4 @@ const upload = multer({
   fileFilter: fileFilter
 });
 
-module.exports = upload;
+module.exports = { upload };

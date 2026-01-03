@@ -10,7 +10,7 @@ const {
   deleteDocumentRequest,
 } = require('../controllers/documentRequestController');
 const { protect, authorize } = require('../middleware/auth');
-const upload = require('../middleware/fileUpload');
+const { upload } = require('../middleware/fileUpload');
 const ROLES = require('../config/roles');
 
 router.post('/', protect, upload.fields([

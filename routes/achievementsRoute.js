@@ -8,7 +8,7 @@ const {
   deleteAchievement
 } = require('../controllers/achievementController');
 const { protect, authorize } = require('../middleware/auth');
-const upload = require('../middleware/fileUpload');
+const { upload } = require('../middleware/fileUpload');
 const ROLES = require('../config/roles');
 
 router.get('/', getAchievements);

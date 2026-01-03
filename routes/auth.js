@@ -17,7 +17,7 @@ const {
 } = require("../controllers/authController");
 const { protect, authorize } = require("../middleware/auth");
 const ROLES = require("../config/roles");
-const upload = require("../middleware/fileUpload");
+const { upload } = require("../middleware/fileUpload");
 
 router.post(
   "/register",

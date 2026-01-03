@@ -15,7 +15,7 @@ const {
 } = require('../controllers/documentRequestController_v2');
 const { protect, authorize } = require('../middleware/auth');
 const ROLES = require('../config/roles');
-const upload = require('../middleware/fileUpload');
+const { upload } = require('../middleware/fileUpload');
 
 // Statistics (Admin only)
 router.get('/stats', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), getStatistics);

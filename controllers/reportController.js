@@ -2,6 +2,22 @@ const Report = require("../models/Report");
 const { LOGCONSTANTS } = require("../config/logConstants");
 const { getRoleName } = require('../utils/roleHelpers');
 const { logAction } = require('../utils/logHelper');
+const ROLES = require('../config/roles');
+const { deleteFromCloudinary, getPublicIdFromUrl } = require('../config/cloudinary');
+
+// Check if using Cloudinary
+const isCloudinaryEnabled = () => {
+  return process.env.CLOUDINARY_CLOUD_NAME && 
+         process.env.CLOUDINARY_API_KEY && 
+         process.env.CLOUDINARY_API_SECRET;
+};
+
+// Helper to get image URL from uploaded file
+const getImageUrl = (file) => {
+  if (!file) return null;
+  // Cloudinary returns the URL in file.path
+  return isCloudinaryEnabled() ? file.path : file.filename;
+};
 
 // @desc    Create a new report
 // @route   POST /api/reports
@@ -10,13 +26,23 @@ exports.createReport = async (req, res) => {
   try {
     const { title, description, category, location, priority } = req.body;
 
+    // Handle image uploads
+    const images = [];
+    if (req.files && req.files.length > 0) {
+      req.files.forEach(file => {
+        const imageUrl = getImageUrl(file);
+        if (imageUrl) images.push(imageUrl);
+      });
+    }
+
     const report = await Report.create({
       title,
       description,
       category,
       location,
       priority,
-      reportedBy: req.user._id,
+      images,
+      reportedBy: req.user?._id,
     });
 
     res.status(201).json({

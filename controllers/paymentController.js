@@ -11,18 +11,18 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 // Document prices (in PHP) - same as documentController
 const DOCUMENT_PRICES = {
-    'indigency': 0,
-    'residency': 50,
+    'indigency': 100,
+    'residency': 100,
     'clearance': 100,
-    'business_permit': 500,
-    'business_clearance': 200,
-    'good_moral': 75,
-    'barangay_id': 150,
-    'liquor_permit': 300,
-    'missionary': 50,
-    'rehab': 50,
-    'ctc': 50,
-    'building_permit': 500,
+    'business_permit': 100,
+    'business_clearance': 100,
+    'good_moral': 100,
+    'barangay_id': 100,
+    'liquor_permit': 100,
+    'missionary': 100,
+    'rehab': 100,
+    'ctc': 100,
+    'building_permit': 100,
 };
 
 // Document type labels
@@ -183,12 +183,14 @@ exports.createPaymentLink = async (req, res) => {
         const documentLabel = DOCUMENT_LABELS[documentRequest.documentType] || documentRequest.documentType;
         const description = `Payment for ${documentLabel} - Request #${documentRequest._id}`;
 
+        // Configure payment link to only accept GCash
         const payload = {
             data: {
                 attributes: {
                     amount: amount,
                     description: description,
                     remarks: `Document Request ID: ${documentRequest._id}`,
+                    payment_method_types: ['gcash'], // Only allow GCash payments
                 }
             }
         };
