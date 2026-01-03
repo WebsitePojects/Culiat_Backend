@@ -64,7 +64,7 @@ const getFolderForField = (fieldname) => {
 };
 
 // Configure Cloudinary storage
-const storage = new CloudinaryStorage({
+const cloudinaryStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
     const folder = getFolderForField(file.fieldname);

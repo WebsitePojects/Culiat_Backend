@@ -168,26 +168,6 @@ exports.createPaymentLink = async (req, res) => {
       });
     }
 
-        const amount = price * 100; // Convert to centavos
-        const documentLabel = DOCUMENT_LABELS[documentRequest.documentType] || documentRequest.documentType;
-        const description = `Payment for ${documentLabel} - Request #${documentRequest._id}`;
-
-        // Configure payment link to only accept GCash
-        const payload = {
-            data: {
-                attributes: {
-                    amount: amount,
-                    description: description,
-                    remarks: `Document Request ID: ${documentRequest._id}`,
-                    payment_method_types: ['gcash'], // Only allow GCash payments
-                }
-            }
-        };
-
-        const response = await axios.post(`${PAYMONGO_API_URL}/links`, payload, {
-            headers: getHeaders()
-        });
-
     if (documentRequest.paymentStatus === "paid") {
       return res.status(400).json({
         success: false,

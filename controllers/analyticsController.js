@@ -573,9 +573,6 @@ exports.getSummary = async (req, res) => {
       error: error.message,
     });
   }
-<<<<<<< HEAD
-};
-=======
 };
 
 /**
@@ -957,4 +954,3 @@ exports.getUserDemographics = async (req, res) => {
     });
   }
 };
->>>>>>> 56d53f2 (asd)
