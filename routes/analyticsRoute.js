@@ -8,6 +8,8 @@ const {
   getPeakHours,
   getPopularServices,
   getSummary,
+  getDashboardStats,
+  getUserDemographics,
 } = require("../controllers/analyticsController");
 const { protect, authorize } = require("../middleware/auth");
 
@@ -23,5 +25,9 @@ router.get("/monthly-trends", getMonthlyTrends);
 router.get("/peak-hours", getPeakHours);
 router.get("/popular-services", getPopularServices);
 router.get("/summary", getSummary);
+
+// Dashboard comprehensive stats
+router.get("/dashboard", getDashboardStats);
+router.get("/demographics", getUserDemographics);
 
 module.exports = router;

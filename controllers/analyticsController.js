@@ -517,4 +517,388 @@ exports.getSummary = async (req, res) => {
       error: error.message
     });
   }
+<<<<<<< HEAD
 };
+=======
+};
+
+/**
+ * @route   GET /api/analytics/dashboard
+ * @desc    Get comprehensive dashboard statistics for admin dashboard
+ * @access  Private (Admin)
+ */
+exports.getDashboardStats = async (req, res) => {
+  try {
+    const { timeRange = "month", area = "all" } = req.query;
+    const now = new Date();
+    let startDate;
+    let prevPeriodStart;
+
+    switch (timeRange) {
+      case "week":
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        prevPeriodStart = new Date(startDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case "quarter":
+        startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+        prevPeriodStart = new Date(startDate.getTime() - 90 * 24 * 60 * 60 * 1000);
+        break;
+      case "year":
+        startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+        prevPeriodStart = new Date(startDate.getTime() - 365 * 24 * 60 * 60 * 1000);
+        break;
+      case "all":
+        startDate = new Date(0);
+        prevPeriodStart = new Date(0);
+        break;
+      case "month":
+      default:
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        prevPeriodStart = new Date(startDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+    }
+
+    // Build query filter for area
+    const areaFilter = area !== "all" ? { "address.area": area } : {};
+    const residentFilter = { role: 74934, registrationStatus: "approved", ...areaFilter };
+
+    // === USER STATISTICS ===
+    const totalResidents = await User.countDocuments(residentFilter);
+    const prevResidents = await User.countDocuments({
+      ...residentFilter,
+      createdAt: { $gte: prevPeriodStart, $lt: startDate }
+    });
+    const newResidentsThisPeriod = await User.countDocuments({
+      ...residentFilter,
+      createdAt: { $gte: startDate }
+    });
+    const residentChange = prevResidents > 0 
+      ? (((newResidentsThisPeriod - prevResidents) / prevResidents) * 100).toFixed(1)
+      : newResidentsThisPeriod > 0 ? 100 : 0;
+
+    // Pending registrations
+    const pendingRegistrations = await User.countDocuments({
+      role: 74934,
+      registrationStatus: "pending",
+      ...areaFilter
+    });
+
+    // === DOCUMENT REQUEST STATISTICS ===
+    const totalDocRequests = await DocumentRequest.countDocuments({
+      createdAt: { $gte: startDate }
+    });
+    const prevDocRequests = await DocumentRequest.countDocuments({
+      createdAt: { $gte: prevPeriodStart, $lt: startDate }
+    });
+    const docRequestChange = prevDocRequests > 0
+      ? (((totalDocRequests - prevDocRequests) / prevDocRequests) * 100).toFixed(1)
+      : totalDocRequests > 0 ? 100 : 0;
+
+    const pendingRequests = await DocumentRequest.countDocuments({ status: "pending" });
+    const approvedRequests = await DocumentRequest.countDocuments({ status: "approved" });
+    const completedRequests = await DocumentRequest.countDocuments({ 
+      status: "completed",
+      createdAt: { $gte: startDate }
+    });
+    const rejectedRequests = await DocumentRequest.countDocuments({ status: "rejected" });
+
+    const completionRate = totalDocRequests > 0 
+      ? ((completedRequests / totalDocRequests) * 100).toFixed(1) 
+      : 0;
+
+    // === REPORT STATISTICS ===
+    const totalReports = await Report.countDocuments({
+      createdAt: { $gte: startDate }
+    });
+    const prevReports = await Report.countDocuments({
+      createdAt: { $gte: prevPeriodStart, $lt: startDate }
+    });
+    const reportChange = prevReports > 0
+      ? (((totalReports - prevReports) / prevReports) * 100).toFixed(1)
+      : totalReports > 0 ? 100 : 0;
+
+    const pendingReports = await Report.countDocuments({ status: "pending" });
+    const resolvedReports = await Report.countDocuments({ 
+      status: "resolved",
+      createdAt: { $gte: startDate }
+    });
+
+    // === TERMS ACCEPTANCE STATISTICS ===
+    const totalTermsAccepted = await TermsAcceptance.countDocuments({
+      createdAt: { $gte: startDate }
+    });
+
+    // === GET DISTINCT AREAS FOR DROPDOWN ===
+    const areas = await User.distinct("address.area", { 
+      role: 74934, 
+      "address.area": { $ne: null, $ne: "" }
+    });
+
+    // === RECENT ACTIVITY ===
+    const recentDocRequests = await DocumentRequest.find()
+      .populate("applicant", "firstName lastName email")
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .select("documentType status createdAt applicant");
+
+    const recentReports = await Report.find()
+      .populate("reportedBy", "firstName lastName")
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .select("title status category createdAt reportedBy");
+
+    res.status(200).json({
+      success: true,
+      data: {
+        overview: {
+          totalResidents,
+          residentChange: parseFloat(residentChange),
+          newResidentsThisPeriod,
+          pendingRegistrations,
+          totalDocRequests,
+          docRequestChange: parseFloat(docRequestChange),
+          pendingRequests,
+          approvedRequests,
+          completedRequests,
+          rejectedRequests,
+          completionRate: parseFloat(completionRate),
+          totalReports,
+          reportChange: parseFloat(reportChange),
+          pendingReports,
+          resolvedReports,
+          totalTermsAccepted,
+        },
+        areas: areas.filter(a => a).sort(),
+        recentActivity: {
+          documentRequests: recentDocRequests.map(req => ({
+            id: req._id,
+            type: req.documentType,
+            status: req.status,
+            date: req.createdAt,
+            applicant: req.applicant ? `${req.applicant.firstName} ${req.applicant.lastName}` : "Unknown"
+          })),
+          reports: recentReports.map(rep => ({
+            id: rep._id,
+            title: rep.title,
+            status: rep.status,
+            category: rep.category,
+            date: rep.createdAt,
+            reportedBy: rep.reportedBy ? `${rep.reportedBy.firstName} ${rep.reportedBy.lastName}` : "Unknown"
+          }))
+        }
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching dashboard stats:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching dashboard statistics",
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @route   GET /api/analytics/demographics
+ * @desc    Get comprehensive user demographics for dashboard
+ * @access  Private (Admin)
+ */
+exports.getUserDemographics = async (req, res) => {
+  try {
+    const { area = "all" } = req.query;
+    
+    // Build area filter
+    const areaFilter = area !== "all" ? { "address.area": area } : {};
+    const baseFilter = { role: 74934, registrationStatus: "approved", ...areaFilter };
+
+    // === GENDER DISTRIBUTION ===
+    const genderStats = await User.aggregate([
+      { $match: baseFilter },
+      { $group: { _id: "$gender", count: { $sum: 1 } } }
+    ]);
+    const genderDistribution = {
+      male: genderStats.find(g => g._id === "Male")?.count || 0,
+      female: genderStats.find(g => g._id === "Female")?.count || 0,
+      other: genderStats.find(g => g._id === "Other")?.count || 0,
+      notSpecified: genderStats.find(g => !g._id)?.count || 0
+    };
+
+    // === CIVIL STATUS DISTRIBUTION ===
+    const civilStatusStats = await User.aggregate([
+      { $match: baseFilter },
+      { $group: { _id: "$civilStatus", count: { $sum: 1 } } }
+    ]);
+    const civilStatusDistribution = {
+      single: civilStatusStats.find(c => c._id === "Single")?.count || 0,
+      married: civilStatusStats.find(c => c._id === "Married")?.count || 0,
+      widowed: civilStatusStats.find(c => c._id === "Widowed")?.count || 0,
+      separated: civilStatusStats.find(c => c._id === "Separated")?.count || 0,
+      divorced: civilStatusStats.find(c => c._id === "Divorced")?.count || 0,
+      notSpecified: civilStatusStats.find(c => !c._id)?.count || 0
+    };
+
+    // === AGE DISTRIBUTION ===
+    const now = new Date();
+    const users = await User.find({ ...baseFilter, dateOfBirth: { $ne: null } })
+      .select("dateOfBirth");
+    
+    const ageRanges = {
+      "0-17": 0,
+      "18-24": 0,
+      "25-34": 0,
+      "35-44": 0,
+      "45-54": 0,
+      "55-64": 0,
+      "65+": 0,
+      notSpecified: 0
+    };
+
+    const totalWithDOB = users.length;
+    const totalWithoutDOB = await User.countDocuments({ ...baseFilter, dateOfBirth: null });
+    ageRanges.notSpecified = totalWithoutDOB;
+
+    users.forEach(user => {
+      const birthDate = new Date(user.dateOfBirth);
+      let age = now.getFullYear() - birthDate.getFullYear();
+      const monthDiff = now.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < birthDate.getDate())) {
+        age--;
+      }
+
+      if (age < 18) ageRanges["0-17"]++;
+      else if (age <= 24) ageRanges["18-24"]++;
+      else if (age <= 34) ageRanges["25-34"]++;
+      else if (age <= 44) ageRanges["35-44"]++;
+      else if (age <= 54) ageRanges["45-54"]++;
+      else if (age <= 64) ageRanges["55-64"]++;
+      else ageRanges["65+"]++;
+    });
+
+    // === VOTER STATISTICS ===
+    const votersRegistered = await User.countDocuments({
+      ...baseFilter,
+      precinctNumber: { $ne: null, $ne: "" }
+    });
+    const nonVoters = await User.countDocuments({
+      ...baseFilter,
+      $or: [{ precinctNumber: null }, { precinctNumber: "" }]
+    });
+
+    // === AREA/PUROK DISTRIBUTION ===
+    const areaStats = await User.aggregate([
+      { $match: { role: 74934, registrationStatus: "approved" } },
+      { $group: { _id: "$address.area", count: { $sum: 1 } } },
+      { $sort: { count: -1 } }
+    ]);
+    const areaDistribution = areaStats
+      .filter(a => a._id)
+      .map(a => ({ area: a._id, count: a.count }));
+
+    // === OCCUPATION STATISTICS ===
+    const occupationStats = await User.aggregate([
+      { $match: { ...baseFilter, occupation: { $ne: null, $ne: "" } } },
+      { $group: { _id: "$occupation", count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 10 }
+    ]);
+    const topOccupations = occupationStats.map(o => ({ 
+      occupation: o._id, 
+      count: o.count 
+    }));
+
+    // === RELIGION STATISTICS ===
+    const religionStats = await User.aggregate([
+      { $match: { ...baseFilter, religion: { $ne: null, $ne: "" } } },
+      { $group: { _id: "$religion", count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 8 }
+    ]);
+    const religionDistribution = religionStats.map(r => ({
+      religion: r._id,
+      count: r.count
+    }));
+
+    // === NATIONALITY STATISTICS ===
+    const nationalityStats = await User.aggregate([
+      { $match: baseFilter },
+      { $group: { _id: "$nationality", count: { $sum: 1 } } },
+      { $sort: { count: -1 } }
+    ]);
+    const nationalityDistribution = nationalityStats.map(n => ({
+      nationality: n._id || "Not Specified",
+      count: n.count
+    }));
+
+    // === REGISTRATION TRENDS (Last 6 months) ===
+    const sixMonthsAgo = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
+    const registrationTrends = await User.aggregate([
+      { 
+        $match: { 
+          ...baseFilter, 
+          createdAt: { $gte: sixMonthsAgo } 
+        } 
+      },
+      {
+        $group: {
+          _id: {
+            year: { $year: "$createdAt" },
+            month: { $month: "$createdAt" }
+          },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { "_id.year": 1, "_id.month": 1 } }
+    ]);
+
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const trendsData = registrationTrends.map(t => ({
+      month: months[t._id.month - 1],
+      year: t._id.year,
+      count: t.count
+    }));
+
+    // === SENIORS & PWD ESTIMATES (Age based) ===
+    let seniorCitizens = 0;
+    users.forEach(user => {
+      const birthDate = new Date(user.dateOfBirth);
+      let age = now.getFullYear() - birthDate.getFullYear();
+      const monthDiff = now.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < birthDate.getDate())) {
+        age--;
+      }
+      if (age >= 60) seniorCitizens++;
+    });
+
+    // === SUMMARY TOTALS ===
+    const totalUsers = await User.countDocuments(baseFilter);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        summary: {
+          totalUsers,
+          totalWithDOB,
+          totalWithoutDOB,
+          votersRegistered,
+          nonVoters,
+          seniorCitizens
+        },
+        gender: genderDistribution,
+        civilStatus: civilStatusDistribution,
+        ageRanges,
+        areaDistribution,
+        topOccupations,
+        religionDistribution,
+        nationalityDistribution,
+        registrationTrends: trendsData
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching demographics:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching user demographics",
+      error: error.message
+    });
+  }
+};
+>>>>>>> 56d53f2 (asd)
