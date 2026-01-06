@@ -171,6 +171,14 @@ const settingsSchema = new mongoose.Schema(
         type: Boolean,
         default: false,
       },
+      maintenanceMessage: {
+        type: String,
+        default: "System is currently under maintenance. Please try again later.",
+      },
+      emailNotificationsEnabled: {
+        type: Boolean,
+        default: true,
+      },
       registrationEnabled: {
         type: Boolean,
         default: true,
@@ -183,6 +191,10 @@ const settingsSchema = new mongoose.Schema(
         type: Boolean,
         default: true,
       },
+      profileUpdateEnabled: {
+        type: Boolean,
+        default: true,
+      },
       maxFileSize: {
         type: Number,
         default: 5, // MB
@@ -190,6 +202,18 @@ const settingsSchema = new mongoose.Schema(
       allowedFileTypes: {
         type: [String],
         default: ["pdf", "jpg", "jpeg", "png", "doc", "docx"],
+      },
+      sessionTimeout: {
+        type: Number,
+        default: 30, // minutes
+      },
+      maxLoginAttempts: {
+        type: Number,
+        default: 5,
+      },
+      autoApproveResidents: {
+        type: Boolean,
+        default: false,
       },
     },
 

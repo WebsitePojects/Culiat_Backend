@@ -37,6 +37,10 @@ const getFolderForField = (fieldname) => {
   switch (fieldname) {
     case 'validID':
     case 'backOfValidID':
+    case 'primaryID1':
+    case 'primaryID1Back':
+    case 'primaryID2':
+    case 'primaryID2Back':
       return 'validIDs';
     case 'photo1x1':
       return 'photos';
@@ -70,10 +74,14 @@ const cloudinaryStorage = new CloudinaryStorage({
     const folder = getFolderForField(file.fieldname);
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     const field = file.fieldname || 'file';
+    
+    // Handle PDF files differently - don't force format conversion
+    const isPDF = file.mimetype === 'application/pdf' || path.extname(file.originalname).toLowerCase() === '.pdf';
+    
     return {
       folder: `culiat-barangay/${folder}`,
-      format: 'jpg',
-      transformation: [{ quality: 'auto' }],
+      // Don't set format for PDFs, let Cloudinary handle it
+      ...(isPDF ? { resource_type: 'raw' } : { format: 'jpg', transformation: [{ quality: 'auto' }] }),
       public_id: `${field}-${uniqueSuffix}`
     };
   }
@@ -92,16 +100,30 @@ const diskStorage = multer.diskStorage({
   }
 });
 
-// File filter to accept only images (JPG, JPEG, PNG only for strict validation)
+// File filter to accept images and PDFs (for birth certificate documents)
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = /jpeg|jpg|png/;
-  const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-  const mimetype = allowedTypes.test(file.mimetype);
-
-  if (mimetype && extname) {
-    return cb(null, true);
+  // Allow PDFs only for birth certificate documents
+  if (file.fieldname === 'birthCertificateDoc') {
+    const allowedTypes = /jpeg|jpg|png|pdf/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = file.mimetype === 'application/pdf' || /jpeg|jpg|png/.test(file.mimetype);
+    
+    if (mimetype && extname) {
+      return cb(null, true);
+    } else {
+      cb(new Error('Only JPG, JPEG, PNG, and PDF files are allowed for birth certificate'));
+    }
   } else {
-    cb(new Error('Only JPG, JPEG, and PNG files are allowed'));
+    // For ID documents, only allow images
+    const allowedTypes = /jpeg|jpg|png/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+
+    if (mimetype && extname) {
+      return cb(null, true);
+    } else {
+      cb(new Error('Only JPG, JPEG, and PNG files are allowed'));
+    }
   }
 };
 

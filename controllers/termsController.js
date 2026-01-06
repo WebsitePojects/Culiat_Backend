@@ -187,3 +187,93 @@ exports.getSignature = async (req, res) => {
     });
   }
 };
+
+/**
+ * @route   GET /api/terms/approved-residents (Admin only)
+ * @desc    Get all approved residents who agreed to terms during registration
+ * @access  Private (Admin/SuperAdmin only)
+ */
+exports.getApprovedResidents = async (req, res) => {
+  try {
+    const User = require("../models/User");
+    const { page = 1, limit = 50, search } = req.query;
+
+    // Build query for approved residents
+    const query = {
+      registrationStatus: "approved",
+      role: 74934, // Resident role
+    };
+
+    // Add search filter if provided
+    if (search) {
+      query.$or = [
+        { firstName: { $regex: search, $options: "i" } },
+        { lastName: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    const residents = await User.find(query)
+      .select("firstName lastName email roleName approvedAt createdAt validID profilePhoto")
+      .sort({ approvedAt: -1, createdAt: -1 })
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
+
+    const count = await User.countDocuments(query);
+
+    // Calculate stats
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const thisWeek = await User.countDocuments({
+      ...query,
+      $or: [
+        { approvedAt: { $gte: weekAgo } },
+        { createdAt: { $gte: weekAgo } },
+      ],
+    });
+
+    const thisMonth = await User.countDocuments({
+      ...query,
+      $or: [
+        { approvedAt: { $gte: monthStart } },
+        { createdAt: { $gte: monthStart } },
+      ],
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        residents: residents.map((r) => ({
+          _id: r._id,
+          firstName: r.firstName,
+          lastName: r.lastName,
+          email: r.email,
+          roleName: r.roleName || "Resident",
+          // Use approvedAt or createdAt as the acceptance date
+          acceptedAt: r.approvedAt || r.createdAt,
+          hasValidID: !!r.validID?.front,
+          profilePhoto: r.profilePhoto,
+        })),
+        stats: {
+          total: count,
+          thisWeek,
+          thisMonth,
+        },
+        pagination: {
+          totalPages: Math.ceil(count / limit),
+          currentPage: parseInt(page),
+          total: count,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching approved residents:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch approved residents",
+      error: error.message,
+    });
+  }
+};

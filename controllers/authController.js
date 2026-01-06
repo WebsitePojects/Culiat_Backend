@@ -36,6 +36,10 @@ const generateToken = (id) => {
 // @access  Public
 exports.register = async (req, res) => {
   try {
+    // Debug: Log received files
+    console.log('📁 Received files:', req.files ? Object.keys(req.files) : 'none');
+    console.log('📝 Received body keys:', Object.keys(req.body));
+    
     const {
       // Account credentials
       username,
@@ -68,6 +72,9 @@ exports.register = async (req, res) => {
       emergencyContact,
       // Birth Certificate fields
       birthCertificate,
+      // Primary ID types
+      primaryID1Type,
+      primaryID2Type,
     } = req.body;
 
     // Check if user already exists
@@ -79,7 +86,7 @@ exports.register = async (req, res) => {
       });
     }
 
-    // Handle validID file upload
+    // Handle validID file upload (Primary ID 1)
     let validIDData = null;
     if (req.files && req.files.validID) {
       const validID = req.files.validID[0];
@@ -101,6 +108,7 @@ exports.register = async (req, res) => {
         mimeType: validID.mimetype,
         fileSize: validID.size,
         uploadedAt: new Date(),
+        idType: primaryID1Type || 'unknown',
       };
     }
 
@@ -124,6 +132,114 @@ exports.register = async (req, res) => {
         originalName: backOfValidID.originalname,
         mimeType: backOfValidID.mimetype,
         fileSize: backOfValidID.size,
+        uploadedAt: new Date(),
+      };
+    }
+
+    // Handle Primary ID 1 file upload (use this or validID)
+    let primaryID1Data = null;
+    if (req.files && req.files.primaryID1) {
+      const primaryID1 = req.files.primaryID1[0];
+      
+      let fileUrl;
+      if (primaryID1.path && primaryID1.path.includes('cloudinary')) {
+        fileUrl = primaryID1.path;
+      } else if (primaryID1.secure_url) {
+        fileUrl = primaryID1.secure_url;
+      } else {
+        fileUrl = `/uploads/validIDs/${primaryID1.filename}`;
+      }
+      
+      primaryID1Data = {
+        url: fileUrl,
+        filename: primaryID1.filename || primaryID1.public_id,
+        originalName: primaryID1.originalname,
+        mimeType: primaryID1.mimetype,
+        fileSize: primaryID1.size,
+        uploadedAt: new Date(),
+        idType: primaryID1Type || 'unknown',
+      };
+      
+      // Also set as validID for backward compatibility
+      if (!validIDData) {
+        validIDData = { ...primaryID1Data };
+      }
+    }
+
+    // Handle Primary ID 1 Back file upload
+    let primaryID1BackData = null;
+    if (req.files && req.files.primaryID1Back) {
+      const primaryID1Back = req.files.primaryID1Back[0];
+      
+      let fileUrl;
+      if (primaryID1Back.path && primaryID1Back.path.includes('cloudinary')) {
+        fileUrl = primaryID1Back.path;
+      } else if (primaryID1Back.secure_url) {
+        fileUrl = primaryID1Back.secure_url;
+      } else {
+        fileUrl = `/uploads/validIDs/${primaryID1Back.filename}`;
+      }
+      
+      primaryID1BackData = {
+        url: fileUrl,
+        filename: primaryID1Back.filename || primaryID1Back.public_id,
+        originalName: primaryID1Back.originalname,
+        mimeType: primaryID1Back.mimetype,
+        fileSize: primaryID1Back.size,
+        uploadedAt: new Date(),
+      };
+      
+      // Also set as backOfValidID for backward compatibility
+      if (!backOfValidIDData) {
+        backOfValidIDData = { ...primaryID1BackData };
+      }
+    }
+
+    // Handle Primary ID 2 file upload
+    let primaryID2Data = null;
+    if (req.files && req.files.primaryID2) {
+      const primaryID2 = req.files.primaryID2[0];
+      
+      let fileUrl;
+      if (primaryID2.path && primaryID2.path.includes('cloudinary')) {
+        fileUrl = primaryID2.path;
+      } else if (primaryID2.secure_url) {
+        fileUrl = primaryID2.secure_url;
+      } else {
+        fileUrl = `/uploads/validIDs/${primaryID2.filename}`;
+      }
+      
+      primaryID2Data = {
+        url: fileUrl,
+        filename: primaryID2.filename || primaryID2.public_id,
+        originalName: primaryID2.originalname,
+        mimeType: primaryID2.mimetype,
+        fileSize: primaryID2.size,
+        uploadedAt: new Date(),
+        idType: primaryID2Type || 'unknown',
+      };
+    }
+
+    // Handle Primary ID 2 Back file upload
+    let primaryID2BackData = null;
+    if (req.files && req.files.primaryID2Back) {
+      const primaryID2Back = req.files.primaryID2Back[0];
+      
+      let fileUrl;
+      if (primaryID2Back.path && primaryID2Back.path.includes('cloudinary')) {
+        fileUrl = primaryID2Back.path;
+      } else if (primaryID2Back.secure_url) {
+        fileUrl = primaryID2Back.secure_url;
+      } else {
+        fileUrl = `/uploads/validIDs/${primaryID2Back.filename}`;
+      }
+      
+      primaryID2BackData = {
+        url: fileUrl,
+        filename: primaryID2Back.filename || primaryID2Back.public_id,
+        originalName: primaryID2Back.originalname,
+        mimeType: primaryID2Back.mimetype,
+        fileSize: primaryID2Back.size,
         uploadedAt: new Date(),
       };
     }
@@ -173,8 +289,32 @@ exports.register = async (req, res) => {
       birthCertificate: birthCertificateData,
       validID: validIDData,
       backOfValidID: backOfValidIDData,
+      // New 2-ID system fields
+      primaryID1: primaryID1Data,
+      primaryID1Back: primaryID1BackData,
+      primaryID1Type: primaryID1Type || null,
+      primaryID2: primaryID2Data,
+      primaryID2Back: primaryID2BackData,
+      primaryID2Type: primaryID2Type || null,
       role: 74934, // Resident role
       registrationStatus: "pending", // Pending admin approval
+      // Set PSA completion deadline to 3 months from now
+      psaCompletion: {
+        deadline: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 days = ~3 months
+        isComplete: false,
+        firstReminderSent: false,
+        secondReminderSent: false,
+        finalReminderSent: false,
+        warningDismissedAt: null,
+        completedAt: null,
+      },
+      profileVerification: {
+        status: 'none',
+        submittedAt: null,
+        reviewedAt: null,
+        reviewedBy: null,
+        rejectionReason: null,
+      },
     });
 
     res.status(201).json({
@@ -228,6 +368,39 @@ exports.login = async (req, res) => {
         success: false,
         message: "Invalid credentials",
       });
+    }
+
+    // Check if account is locked due to PSA completion deadline
+    if (user.isAccountLocked) {
+      return res.status(403).json({
+        success: false,
+        message: "Your account has been locked due to incomplete profile.",
+        lockReason: user.accountLockReason || "Profile completion deadline exceeded (90 days). Please complete your PSA birth certificate information and upload the document for verification.",
+        requiresProfileCompletion: true,
+        lockedAt: user.accountLockedAt,
+        unlockRequestStatus: user.unlockRequest?.status || 'none',
+      });
+    }
+
+    // Check if PSA completion deadline has passed for residents
+    if (user.role === 74934 && user.psaCompletion && !user.psaCompletion.isComplete) {
+      const deadline = user.psaCompletion.deadline;
+      if (deadline && new Date() > new Date(deadline)) {
+        // Lock the account
+        user.isAccountLocked = true;
+        user.accountLockReason = "Profile completion deadline exceeded (90 days). Please complete your PSA birth certificate information and upload the document for verification.";
+        user.accountLockedAt = new Date();
+        await user.save();
+
+        return res.status(403).json({
+          success: false,
+          message: "Your account has been locked due to incomplete profile.",
+          lockReason: user.accountLockReason,
+          requiresProfileCompletion: true,
+          lockedAt: user.accountLockedAt,
+          deadline: deadline,
+        });
+      }
     }
 
     // Check if resident registration is approved
@@ -326,6 +499,16 @@ exports.getMe = async (req, res) => {
         photo1x1: user.photo1x1,
         isActive: user.isActive,
         createdAt: user.createdAt,
+        // PSA Profile completion status (for residents)
+        psaCompletion: user.role === 74934 ? {
+          deadline: user.psaCompletion?.deadline,
+          isComplete: user.psaCompletion?.isComplete || false,
+          daysLeft: user.getDaysUntilPsaDeadline ? user.getDaysUntilPsaDeadline() : null,
+          isApproaching: user.isPsaDeadlineApproaching ? user.isPsaDeadlineApproaching() : false,
+          isPassed: user.isPsaDeadlinePassed ? user.isPsaDeadlinePassed() : false,
+          warningDismissedAt: user.psaCompletion?.warningDismissedAt,
+        } : null,
+        profileVerification: user.role === 74934 ? user.profileVerification : null,
       },
     });
   } catch (error) {

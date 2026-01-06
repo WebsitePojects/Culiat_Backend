@@ -13,6 +13,7 @@ router.get("/history", termsController.getAcceptanceHistory);
 
 // Admin routes
 router.get("/all-acceptances", isAdmin, termsController.getAllAcceptances);
+router.get("/approved-residents", isAdmin, termsController.getApprovedResidents);
 router.get("/signature/:acceptanceId", isAdmin, termsController.getSignature);
 
 module.exports = router;

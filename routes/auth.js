@@ -19,12 +19,35 @@ const { protect, authorize } = require("../middleware/auth");
 const ROLES = require("../config/roles");
 const { upload } = require("../middleware/fileUpload");
 
+// Multer error handler wrapper
+const handleMulterUpload = (req, res, next) => {
+  const uploadMiddleware = upload.fields([
+    { name: "validID", maxCount: 1 },
+    { name: "backOfValidID", maxCount: 1 },
+    { name: "primaryID1", maxCount: 1 },
+    { name: "primaryID1Back", maxCount: 1 },
+    { name: "primaryID2", maxCount: 1 },
+    { name: "primaryID2Back", maxCount: 1 },
+    { name: "birthCertificateDoc", maxCount: 1 }
+  ]);
+  
+  uploadMiddleware(req, res, (err) => {
+    if (err) {
+      console.error('❌ Multer error:', err.message);
+      console.error('❌ Multer error field:', err.field);
+      return res.status(400).json({
+        success: false,
+        message: `File upload error: ${err.message}`,
+        field: err.field
+      });
+    }
+    next();
+  });
+};
+
 router.post(
   "/register",
-  upload.fields([
-    { name: "validID", maxCount: 1 },
-    { name: "backOfValidID", maxCount: 1 }
-  ]),
+  handleMulterUpload,
   register
 );
 router.post(

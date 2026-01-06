@@ -54,6 +54,12 @@ app.use("/api/documents", require("./routes/documentRoutes"));
 app.use("/api/contact-messages", require("./routes/contactMessagesRoute"));
 app.use("/api/feedback", require("./routes/contactMessagesRoute")); // Alias for frontend
 
+// Profile verification routes (PSA birth certificate verification)
+app.use("/api/profile-verification", require("./routes/profileVerificationRoute"));
+
+// Profile update routes (for residents to update their profile)
+app.use("/api/profile-update", require("./routes/profileUpdateRoute"));
+
 
 // Health check route
 app.get("/api/health", (req, res) => {
