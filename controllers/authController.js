@@ -916,6 +916,203 @@ exports.getAllUsers = async (req, res) => {
   }
 };
 
+// @desc    Create a new user (Admin creates staff/admin users)
+// @route   POST /api/auth/users
+// @access  Private/Admin
+exports.createUser = async (req, res) => {
+  try {
+    const { firstName, lastName, email, username, phoneNumber, role, password } = req.body;
+
+    // Validate required fields
+    if (!firstName || !lastName || !email || !username || !role) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide all required fields: firstName, lastName, email, username, role",
+      });
+    }
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ 
+      $or: [{ email }, { username }] 
+    });
+    
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: existingUser.email === email 
+          ? "User with this email already exists" 
+          : "Username already taken",
+      });
+    }
+
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password || "TempPassword123!", salt);
+
+    // Create user
+    const user = await User.create({
+      firstName,
+      lastName,
+      email,
+      username,
+      phoneNumber,
+      role, // Role code from frontend
+      password: hashedPassword,
+      registrationStatus: "approved", // Auto-approve admin-created users
+      isActive: true,
+    });
+
+    // Log the action
+    await logAction(
+      LOGCONSTANTS.actions.user.CREATE_USER,
+      req.user._id,
+      `Admin created new user: ${firstName} ${lastName} (${getRoleName(role)})`,
+      { targetUserId: user._id, role: getRoleName(role) }
+    );
+
+    res.status(201).json({
+      success: true,
+      message: "User created successfully",
+      data: {
+        _id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        username: user.username,
+        role: user.role,
+        roleName: getRoleName(user.role),
+      },
+    });
+  } catch (error) {
+    console.error("Error creating user:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error creating user",
+      error: error.message,
+    });
+  }
+};
+
+// @desc    Update user by ID (Admin)
+// @route   PUT /api/auth/users/:userId
+// @access  Private/Admin
+exports.updateUserById = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { firstName, lastName, email, phoneNumber, role, isActive } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Check if email is being changed and if it's already taken
+    if (email && email !== user.email) {
+      const existingEmail = await User.findOne({ email, _id: { $ne: userId } });
+      if (existingEmail) {
+        return res.status(400).json({
+          success: false,
+          message: "Email already in use by another user",
+        });
+      }
+    }
+
+    // Update fields
+    if (firstName) user.firstName = firstName;
+    if (lastName) user.lastName = lastName;
+    if (email) user.email = email;
+    if (phoneNumber !== undefined) user.phoneNumber = phoneNumber;
+    if (role) user.role = role;
+    if (typeof isActive === 'boolean') user.isActive = isActive;
+
+    await user.save();
+
+    // Log the action
+    await logAction(
+      LOGCONSTANTS.actions.user.DELETE_USER,
+      req.user._id,
+      `Admin updated user: ${user.firstName} ${user.lastName}`,
+      { targetUserId: user._id }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "User updated successfully",
+      data: {
+        _id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        username: user.username,
+        phoneNumber: user.phoneNumber,
+        role: user.role,
+        roleName: getRoleName(user.role),
+        isActive: user.isActive,
+      },
+    });
+  } catch (error) {
+    console.error("Error updating user:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error updating user",
+      error: error.message,
+    });
+  }
+};
+
+// @desc    Delete user by ID (Admin)
+// @route   DELETE /api/auth/users/:userId
+// @access  Private/Admin
+exports.deleteUserById = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Prevent deleting yourself
+    if (user._id.toString() === req.user._id.toString()) {
+      return res.status(400).json({
+        success: false,
+        message: "You cannot delete your own account",
+      });
+    }
+
+    const userName = `${user.firstName} ${user.lastName}`;
+    const userRole = getRoleName(user.role);
+
+    await User.findByIdAndDelete(userId);
+
+    // Log the action
+    await logAction(
+      LOGCONSTANTS.actions.user.DELETE_USER,
+      req.user._id,
+      `Admin deleted user: ${userName} (${userRole})`,
+      { targetUserId: userId }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "User deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting user:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error deleting user",
+      error: error.message,
+    });
+  }
+};
+
 // @desc    Forgot Password
 // @route   POST /api/auth/forgotpassword
 // @access  Public

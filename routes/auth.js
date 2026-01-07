@@ -12,6 +12,9 @@ const {
   approveRegistration,
   rejectRegistration,
   getAllUsers,
+  createUser,
+  updateUserById,
+  deleteUserById,
   forgotPassword,
   resetPassword,
 } = require("../controllers/authController");
@@ -69,6 +72,24 @@ router.get(
   protect,
   authorize(ROLES.SuperAdmin, ROLES.Admin),
   getAllUsers
+);
+router.post(
+  "/users",
+  protect,
+  authorize(ROLES.SuperAdmin, ROLES.Admin),
+  createUser
+);
+router.put(
+  "/users/:userId",
+  protect,
+  authorize(ROLES.SuperAdmin, ROLES.Admin),
+  updateUserById
+);
+router.delete(
+  "/users/:userId",
+  protect,
+  authorize(ROLES.SuperAdmin, ROLES.Admin),
+  deleteUserById
 );
 router.get(
   "/pending-registrations",

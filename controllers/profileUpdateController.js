@@ -261,11 +261,15 @@ exports.submitProfileUpdate = async (req, res) => {
       for (const [fieldName, files] of Object.entries(req.files)) {
         if (Array.isArray(files)) {
           for (const file of files) {
+            // For Cloudinary: file.path contains the secure URL
+            // For local storage: file.path contains the local path
+            const fileUrl = file.path || file.location;
             documents.push({
               fieldName,
-              url: file.path || file.location,
-              filename: file.filename,
+              url: fileUrl,
+              filename: file.filename || file.public_id,
               originalName: file.originalname,
+              publicId: file.public_id || null, // Cloudinary public_id for deletion
               uploadedAt: new Date(),
             });
           }
@@ -274,11 +278,13 @@ exports.submitProfileUpdate = async (req, res) => {
     }
     // Handle single file upload (e.g., from multer.single())
     if (req.file) {
+      const fileUrl = req.file.path || req.file.location;
       documents.push({
         fieldName: req.file.fieldname,
-        url: req.file.path || req.file.location,
-        filename: req.file.filename,
+        url: fileUrl,
+        filename: req.file.filename || req.file.public_id,
         originalName: req.file.originalname,
+        publicId: req.file.public_id || null, // Cloudinary public_id for deletion
         uploadedAt: new Date(),
       });
     }

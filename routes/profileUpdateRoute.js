@@ -2,6 +2,9 @@ const express = require("express");
 const router = express.Router();
 const multer = require("multer");
 const path = require("path");
+const fs = require("fs");
+const { CloudinaryStorage } = require("multer-storage-cloudinary");
+const { cloudinary } = require("../config/cloudinary");
 const { protect, isAdmin } = require("../middleware/auth");
 
 const {
@@ -16,10 +19,42 @@ const {
   getUserProfileWithHistory,
 } = require("../controllers/profileUpdateController");
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
+// Check if Cloudinary is configured
+const isCloudinaryConfigured = () => {
+  return cloudinary && 
+         process.env.CLOUDINARY_CLOUD_NAME && 
+         process.env.CLOUDINARY_API_KEY && 
+         process.env.CLOUDINARY_API_SECRET;
+};
+
+// Ensure local upload directory exists (for fallback)
+const localUploadDir = "uploads/profile-updates/";
+if (!fs.existsSync(localUploadDir)) {
+  fs.mkdirSync(localUploadDir, { recursive: true });
+}
+
+// Cloudinary storage configuration for profile updates
+const cloudinaryStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: async (req, file) => {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    const isPDF = file.mimetype === "application/pdf" || path.extname(file.originalname).toLowerCase() === ".pdf";
+    
+    return {
+      folder: "culiat-barangay/profile-updates",
+      ...(isPDF 
+        ? { resource_type: "raw" } 
+        : { format: "jpg", transformation: [{ quality: "auto" }] }
+      ),
+      public_id: `profile-update-${uniqueSuffix}`,
+    };
+  },
+});
+
+// Local disk storage (fallback when Cloudinary is not configured)
+const diskStorage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, "uploads/profile-updates/");
+    cb(null, localUploadDir);
   },
   filename: function (req, file, cb) {
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
@@ -35,6 +70,20 @@ const fileFilter = (req, file, cb) => {
     cb(new Error("Invalid file type. Only JPEG, PNG, and PDF files are allowed."), false);
   }
 };
+
+// Choose storage based on environment configuration
+let storage;
+try {
+  storage = isCloudinaryConfigured() ? cloudinaryStorage : diskStorage;
+  if (isCloudinaryConfigured()) {
+    console.log("📁 Profile Update: Using Cloudinary for file storage");
+  } else {
+    console.log("📁 Profile Update: Using local disk storage");
+  }
+} catch (error) {
+  console.log("📁 Profile Update: Cloudinary init failed, using local disk storage");
+  storage = diskStorage;
+}
 
 const upload = multer({
   storage,

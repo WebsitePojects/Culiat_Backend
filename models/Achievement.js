@@ -14,7 +14,7 @@ const AchievementSchema = new mongoose.Schema({
   },
   description: {
     type: String,
-    maxlength: [500, 'Description can not be more than 500 characters']
+    maxlength: [10000, 'Description can not be more than 10000 characters']
   },
   date: {
     type: Date,
