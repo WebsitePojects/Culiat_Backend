@@ -314,6 +314,12 @@ const documentRequestSchema = new mongoose.Schema(
 
 // Pre-save hook to validate file uploads and business info
 documentRequestSchema.pre("save", function (next) {
+  // Skip validation when only updating status (reject/approve operations)
+  // Only validate business info on new document creation
+  if (!this.isNew && this.isModified('status')) {
+    return next();
+  }
+
   // Check if business info is required for this document type
   // Note: business_clearance only requires businessName (nature_of_business is NOT in the template)
   const businessDocTypes = [

@@ -217,7 +217,8 @@ const buildFullName = (firstName, middleName, lastName, suffix) => {
 };
 
 /**
- * Build owner name in LASTNAME, FIRSTNAME M. format - UPPERCASE
+ * Build owner name in LASTNAME, FIRSTNAME format - UPPERCASE
+ * Excludes middle initial to prevent line wrapping issues
  */
 const buildOwnerName = (lastName, firstName, middleName) => {
   if (!lastName && !firstName) return "";
@@ -226,11 +227,23 @@ const buildOwnerName = (lastName, firstName, middleName) => {
   if (firstName) {
     name += ", " + firstName.toUpperCase();
   }
-  if (middleName) {
-    // Get first letter of middle name
-    name += " " + middleName.charAt(0).toUpperCase() + ".";
-  }
+  // Don't include middle initial to prevent wrapping to new line
   return name;
+};
+
+/**
+ * Build owner name without commas - UPPERCASE (LASTNAME FIRSTNAME M.)
+ * Better for business permits where space is limited
+ */
+const buildOwnerNameCompact = (lastName, firstName, middleName) => {
+  if (!lastName && !firstName) return "";
+
+  const parts = [];
+  if (lastName) parts.push(lastName.toUpperCase());
+  if (firstName) parts.push(firstName.toUpperCase());
+  if (middleName) parts.push(middleName.charAt(0).toUpperCase() + ".");
+  
+  return parts.join(" ");
 };
 
 /**
@@ -260,10 +273,12 @@ const buildFullAddress = (address) => {
  */
 const buildBusinessAddress = (businessAddress) => {
   if (!businessAddress) return "";
-  const parts = [businessAddress.houseNumber, businessAddress.street].filter(
-    Boolean
-  );
-  return toTitleCase(parts.join(" "));
+  const parts = [
+    businessAddress.houseNumber,
+    businessAddress.street,
+    businessAddress.subdivision
+  ].filter(Boolean);
+  return toTitleCase(parts.join(", "));
 };
 
 /**
@@ -514,12 +529,25 @@ exports.generateDocumentFile = async (req, res) => {
         documentRequest.businessInfo?.representativeContactNumber || "",
 
       // OR Number and Amount Paid (for business permits)
-      or_number: documentRequest.businessInfo?.orNumber || "",
-      amount_paid: documentRequest.fees?.toFixed(2) || "0.00",
-      fees: documentRequest.fees?.toFixed(2) || "0.00",
+      // Default OR Number to "PANGKABUHAYAN" if not set
+      or_number: documentRequest.businessInfo?.orNumber || "PANGKABUHAYAN",
+      // Default Amount Paid to "0.00"
+      amount_paid: documentRequest.fees && documentRequest.fees > 0 
+        ? documentRequest.fees.toFixed(2) 
+        : "0.00",
+      fees: documentRequest.fees && documentRequest.fees > 0 
+        ? documentRequest.fees.toFixed(2) 
+        : "0.00",
 
       // Owner name in LASTNAME, FIRSTNAME M. format
       owner_name: buildOwnerName(
+        documentRequest.lastName,
+        documentRequest.firstName,
+        documentRequest.middleName
+      ),
+      
+      // Owner name compact format (LASTNAME FIRSTNAME M.) - no comma, better for tight spaces
+      owner_name_compact: buildOwnerNameCompact(
         documentRequest.lastName,
         documentRequest.firstName,
         documentRequest.middleName

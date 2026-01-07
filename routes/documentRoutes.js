@@ -7,6 +7,10 @@ const {
   getDocumentPreview,
   getTemplates,
 } = require('../controllers/documentController');
+const {
+  exportDocumentHistory,
+  exportDocumentPayments,
+} = require('../controllers/documentRequestController');
 const { protect } = require('../middleware/auth');
 const staffOrAdmin = require('../middleware/staffOrAdmin');
 
@@ -18,6 +22,10 @@ router.use(protect);
 
 // Get document status (any authenticated user)
 router.get('/status/:requestId', getDocumentStatus);
+
+// Export routes (admin/staff only) - MUST be before dynamic routes
+router.get('/history/export', staffOrAdmin, exportDocumentHistory);
+router.get('/payments/export', staffOrAdmin, exportDocumentPayments);
 
 // Get document preview data (admin/staff only)
 router.get('/preview/:requestId', staffOrAdmin, getDocumentPreview);

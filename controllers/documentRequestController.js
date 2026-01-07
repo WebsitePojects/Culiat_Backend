@@ -358,7 +358,7 @@ exports.updateDocumentRequest = async (req, res) => {
 // @access  Private (Admin)
 exports.updateRequestStatus = async (req, res) => {
   try {
-    const { status } = req.body;
+    const { status, businessInfo, fees } = req.body;
     const request = await DocumentRequest.findById(req.params.id);
 
     if (!request) {
@@ -370,6 +370,27 @@ exports.updateRequestStatus = async (req, res) => {
     request.status = status;
     request.processedBy = req.user?._id;
     request.processedAt = new Date();
+
+    // Update business info if provided (for business permits/clearance)
+    if (businessInfo) {
+      // Preserve existing businessInfo and merge new values
+      if (!request.businessInfo) {
+        request.businessInfo = {};
+      }
+      // Merge business info properties
+      Object.keys(businessInfo).forEach(key => {
+        if (businessInfo[key] !== undefined) {
+          request.businessInfo[key] = businessInfo[key];
+        }
+      });
+      // Mark as modified for Mongoose to save nested object
+      request.markModified('businessInfo');
+    }
+
+    // Update fees if provided
+    if (fees !== undefined && fees !== null) {
+      request.fees = parseFloat(fees);
+    }
 
     await request.save();
 
@@ -581,6 +602,171 @@ exports.getDocumentHistory = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch document history",
+      error: error.message,
+    });
+  }
+};
+
+// @desc    Export document history to CSV
+// @route   GET /api/documents/history/export
+// @access  Private (Admin)
+exports.exportDocumentHistory = async (req, res) => {
+  try {
+    const { documentType, status, dateFrom, dateTo } = req.query;
+
+    const filter = {};
+
+    if (documentType && documentType !== "all") {
+      filter.documentType = documentType;
+    }
+
+    if (status && status !== "all") {
+      filter.status = status;
+    }
+
+    if (dateFrom || dateTo) {
+      filter.createdAt = {};
+      if (dateFrom) filter.createdAt.$gte = new Date(dateFrom);
+      if (dateTo) {
+        const endDate = new Date(dateTo);
+        endDate.setHours(23, 59, 59, 999);
+        filter.createdAt.$lte = endDate;
+      }
+    }
+
+    const requests = await DocumentRequest.find(filter)
+      .populate("applicant", "firstName lastName email")
+      .populate("processedBy", "firstName lastName")
+      .sort({ createdAt: -1 });
+
+    // Generate CSV content
+    const headers = [
+      "Reference Number",
+      "Document Type",
+      "Applicant Name",
+      "Status",
+      "Payment Status",
+      "Fees",
+      "Processed By",
+      "Created At",
+      "Processed At",
+    ];
+
+    const rows = requests.map((req) => [
+      req.controlNumber || `REQ-${req._id.toString().slice(-8).toUpperCase()}`,
+      getDocumentLabel(req.documentType),
+      `${req.firstName} ${req.lastName}`,
+      req.status,
+      req.paymentStatus || "N/A",
+      req.fees || 0,
+      req.processedBy
+        ? `${req.processedBy.firstName} ${req.processedBy.lastName}`
+        : "N/A",
+      req.createdAt ? new Date(req.createdAt).toLocaleString() : "N/A",
+      req.processedAt ? new Date(req.processedAt).toLocaleString() : "N/A",
+    ]);
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((row) =>
+        row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")
+      ),
+    ].join("\n");
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=document-request-history-${
+        new Date().toISOString().split("T")[0]
+      }.csv`
+    );
+    res.send(csvContent);
+  } catch (error) {
+    console.error("Error exporting document history:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to export document history",
+      error: error.message,
+    });
+  }
+};
+
+// @desc    Export document payments to CSV
+// @route   GET /api/documents/payments/export
+// @access  Private (Admin)
+exports.exportDocumentPayments = async (req, res) => {
+  try {
+    const { documentType, dateFrom, dateTo } = req.query;
+
+    const filter = { paymentStatus: "paid" };
+
+    if (documentType && documentType !== "all") {
+      filter.documentType = documentType;
+    }
+
+    if (dateFrom || dateTo) {
+      filter.paidAt = {};
+      if (dateFrom) filter.paidAt.$gte = new Date(dateFrom);
+      if (dateTo) {
+        const endDate = new Date(dateTo);
+        endDate.setHours(23, 59, 59, 999);
+        filter.paidAt.$lte = endDate;
+      }
+    }
+
+    const payments = await DocumentRequest.find(filter)
+      .populate("processedBy", "firstName lastName")
+      .sort({ paidAt: -1 });
+
+    // Generate CSV content
+    const headers = [
+      "Receipt Number",
+      "Reference Number",
+      "Document Type",
+      "Payer Name",
+      "Amount",
+      "Payment Method",
+      "Received By",
+      "Payment Date",
+    ];
+
+    const rows = payments.map((p) => [
+      p.paymentReference ||
+        `OR-${new Date(p.paidAt).getFullYear()}-${p._id
+          .toString()
+          .slice(-6)
+          .toUpperCase()}`,
+      p.controlNumber || `REQ-${p._id.toString().slice(-8).toUpperCase()}`,
+      getDocumentLabel(p.documentType),
+      `${p.firstName} ${p.lastName}`,
+      p.fees || getDocumentPrice(p.documentType),
+      p.paymentMethod || "Cash",
+      p.processedBy
+        ? `${p.processedBy.firstName} ${p.processedBy.lastName}`
+        : "N/A",
+      p.paidAt ? new Date(p.paidAt).toLocaleString() : "N/A",
+    ]);
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((row) =>
+        row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")
+      ),
+    ].join("\n");
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=document-payments-report-${
+        new Date().toISOString().split("T")[0]
+      }.csv`
+    );
+    res.send(csvContent);
+  } catch (error) {
+    console.error("Error exporting document payments:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to export document payments",
       error: error.message,
     });
   }
