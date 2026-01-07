@@ -965,6 +965,17 @@ exports.createUser = async (req, res) => {
     // Note: Password will be hashed by the User model's pre-save hook
     const userPassword = password || "TempPassword123!";
 
+    // Ensure role is a number (frontend might send as string)
+    const roleCode = parseInt(role, 10);
+    
+    // Validate role code
+    if (![74932, 74933, 74934].includes(roleCode)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid role code",
+      });
+    }
+
     // Create user
     const user = await User.create({
       firstName,
@@ -972,7 +983,7 @@ exports.createUser = async (req, res) => {
       email,
       username,
       phoneNumber,
-      role, // Role code from frontend
+      role: roleCode, // Role code from frontend (converted to number)
       password: userPassword,
       registrationStatus: "approved", // Auto-approve admin-created users
       isActive: true,
@@ -1041,7 +1052,12 @@ exports.updateUserById = async (req, res) => {
     if (lastName) user.lastName = lastName;
     if (email) user.email = email;
     if (phoneNumber !== undefined) user.phoneNumber = phoneNumber;
-    if (role) user.role = role;
+    if (role) {
+      const roleCode = parseInt(role, 10);
+      if ([74932, 74933, 74934].includes(roleCode)) {
+        user.role = roleCode;
+      }
+    }
     if (typeof isActive === 'boolean') user.isActive = isActive;
 
     await user.save();
