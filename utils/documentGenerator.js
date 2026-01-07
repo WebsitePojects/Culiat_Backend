@@ -5,6 +5,9 @@ const sizeOf = require("image-size");
 const fs = require("fs");
 const path = require("path");
 
+// QR Code generator for document verification
+const { generateQRCodeBuffer } = require("./qrCodeGenerator");
+
 /**
  * Replace images in textboxes/shapes by alt-text
  * This function searches for existing images with specific alt-text and replaces them
@@ -29,6 +32,8 @@ function replaceImagesByAltText(zip, imageReplacements) {
 
   let relsContent = relsFile.asText();
 
+  console.log(`🔍 Processing ${Object.keys(imageReplacements).length} image replacements...`);
+
   // Process each image replacement
   for (const [altTextName, imagePath] of Object.entries(imageReplacements)) {
     if (!imagePath || !fs.existsSync(imagePath)) {
@@ -38,15 +43,44 @@ function replaceImagesByAltText(zip, imageReplacements) {
       continue;
     }
 
+    console.log(`🔍 Looking for alt-text: "${altTextName}"`);
+
     // Find the drawing element that contains this alt-text
-    // The structure in DOCX is: <wp:docPr ... descr="photo_1x1" .../> within a <w:drawing> element
-    // We need to find the a:blip r:embed reference within the SAME drawing element
+    // Word can store alt-text in multiple ways:
+    // 1. descr="alt_text" in <wp:docPr>
+    // 2. title="alt_text" in <wp:docPr>
+    // 3. name="alt_text" in <wp:docPr>
+    // 4. In <a:picLocks> or other elements
+    
+    // Try multiple patterns for alt-text matching
+    const altTextPatterns = [
+      new RegExp(`descr="[^"]*${altTextName}[^"]*"`, "i"),
+      new RegExp(`title="[^"]*${altTextName}[^"]*"`, "i"),
+      new RegExp(`name="[^"]*${altTextName}[^"]*"`, "i"),
+      new RegExp(`descr="${altTextName}"`, "i"),
+      new RegExp(`title="${altTextName}"`, "i"),
+      new RegExp(`name="${altTextName}"`, "i"),
+    ];
 
-    // Pattern to match wp:docPr with the specific alt text
-    const altTextRegex = new RegExp(`descr="[^"]*${altTextName}[^"]*"`, "i");
+    let foundAltText = false;
+    let matchedPattern = null;
+    
+    for (const pattern of altTextPatterns) {
+      if (pattern.test(content)) {
+        foundAltText = true;
+        matchedPattern = pattern;
+        console.log(`✅ Found alt-text "${altTextName}" with pattern: ${pattern}`);
+        break;
+      }
+    }
 
-    if (!altTextRegex.test(content)) {
+    if (!foundAltText) {
       console.log(`ℹ️ Alt-text "${altTextName}" not found in document`);
+      console.log(`   Debug: Searching in document content...`);
+      // Log a snippet of the document to help debug
+      if (content.includes(altTextName)) {
+        console.log(`   ⚠️ Found "${altTextName}" as plain text but not as alt-text attribute`);
+      }
       continue;
     }
 
@@ -61,18 +95,28 @@ function replaceImagesByAltText(zip, imageReplacements) {
 
     // Find the embed rId associated with this specific alt-text
     // We need to look for <w:drawing> blocks that contain the alt-text
-    // Pattern: <w:drawing>...<wp:docPr ... descr="photo_1x1"/>...<a:blip...r:embed="rIdX".../>...</w:drawing>
+    // Pattern: <w:drawing>...<wp:docPr ... descr="qr_code"/>...<a:blip...r:embed="rIdX".../>...</w:drawing>
 
     // Split content by drawing elements to find the right one
     const drawingPattern = /<w:drawing>[\s\S]*?<\/w:drawing>/gi;
     const drawings = content.match(drawingPattern) || [];
 
+    console.log(`   Found ${drawings.length} drawing elements in document`);
+
     let targetRelId = null;
     let targetDrawing = null;
 
     for (const drawing of drawings) {
-      // Check if this drawing contains our alt-text
-      if (altTextRegex.test(drawing)) {
+      // Check if this drawing contains our alt-text using any of the patterns
+      let drawingHasAltText = false;
+      for (const pattern of altTextPatterns) {
+        if (pattern.test(drawing)) {
+          drawingHasAltText = true;
+          break;
+        }
+      }
+      
+      if (drawingHasAltText) {
         // Find the r:embed in this specific drawing
         const embedMatch = drawing.match(/r:embed="([^"]+)"/);
         if (embedMatch) {
@@ -88,6 +132,10 @@ function replaceImagesByAltText(zip, imageReplacements) {
       console.log(
         `⚠️ Could not find embed reference for alt-text "${altTextName}"`
       );
+      // Try alternative: look in VML drawings (older Word format)
+      const vmlPattern = /<v:shape[^>]*>[\s\S]*?<\/v:shape>/gi;
+      const vmlShapes = content.match(vmlPattern) || [];
+      console.log(`   Checking ${vmlShapes.length} VML shapes...`);
       continue;
     }
 
@@ -123,10 +171,43 @@ function replaceImagesByAltText(zip, imageReplacements) {
           zip.file("[Content_Types].xml", ctContent);
         }
       }
+      
+      console.log(`✅ Successfully replaced image for alt-text "${altTextName}"`);
+    } else {
+      console.log(`⚠️ Could not find image target for relationship ${targetRelId}`);
     }
   }
 
   return zip;
+}
+
+/**
+ * Debug function to find all alt-text values in a document
+ * @param {string} templatePath - Path to the template file
+ */
+function debugFindAltTexts(templatePath) {
+  const content = fs.readFileSync(templatePath, "binary");
+  const zip = new PizZip(content);
+  const documentXml = zip.file("word/document.xml");
+  
+  if (!documentXml) {
+    console.log("No document.xml found");
+    return [];
+  }
+  
+  const docContent = documentXml.asText();
+  
+  // Find all descr, title, and name attributes
+  const descrMatches = docContent.match(/descr="([^"]*)"/gi) || [];
+  const titleMatches = docContent.match(/title="([^"]*)"/gi) || [];
+  const nameMatches = docContent.match(/name="([^"]*)"/gi) || [];
+  
+  console.log("=== ALT-TEXT DEBUG ===");
+  console.log("descr attributes:", descrMatches);
+  console.log("title attributes:", titleMatches);
+  console.log("name attributes (first 10):", nameMatches.slice(0, 10));
+  
+  return { descrMatches, titleMatches, nameMatches };
 }
 
 /**
@@ -143,6 +224,10 @@ async function generateDocument(
   imageOptions = {},
   imageReplacements = {}
 ) {
+  // Debug: Find all alt-texts in the template
+  console.log(`\n📄 Generating document from: ${templatePath}`);
+  debugFindAltTexts(templatePath);
+  
   // Read template file
   const content = fs.readFileSync(templatePath, "binary");
 
@@ -250,4 +335,5 @@ function getAvailableTemplates(templatesDir) {
 module.exports = {
   generateDocument,
   getAvailableTemplates,
+  debugFindAltTexts,
 };

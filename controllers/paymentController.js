@@ -45,6 +45,14 @@ const DOCUMENT_LABELS = {
   building_permit: "Building Permit",
 };
 
+// Helper to calculate total amount with PayMongo commission
+const calculateTotalWithCommission = (basePrice) => {
+  if (basePrice === 0) return 0;
+  // Add PayMongo commission (2.5%) so barangay receives full base price
+  const commission = Math.ceil(basePrice * PAYMONGO_COMMISSION_RATE);
+  return basePrice + commission;
+};
+
 // Helper to create PayMongo headers
 const getHeaders = () => {
   const token = Buffer.from(PAYMONGO_SECRET_KEY + ":").toString("base64");

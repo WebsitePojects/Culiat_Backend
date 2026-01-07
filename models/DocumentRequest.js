@@ -282,6 +282,29 @@ const documentRequestSchema = new mongoose.Schema(
       trim: true,
     },
 
+    // QR Code Verification fields
+    verificationToken: {
+      type: String,
+      unique: true,
+      sparse: true, // Allow null for pending requests
+      index: true,
+      trim: true,
+    },
+    verificationSecurityHash: {
+      type: String,
+      trim: true,
+    },
+    verificationGeneratedAt: {
+      type: Date,
+    },
+    documentGeneratedAt: {
+      type: Date,
+    },
+    qrCodeUrl: {
+      type: String,
+      trim: true,
+    },
+
     createdAt: { type: Date, default: Date.now },
   },
   {

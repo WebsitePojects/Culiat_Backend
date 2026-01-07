@@ -4,6 +4,7 @@ const {
   generateDocumentFile,
   downloadDocument,
   getDocumentStatus,
+  getDocumentPreview,
   getTemplates,
 } = require('../controllers/documentController');
 const { protect } = require('../middleware/auth');
@@ -17,6 +18,9 @@ router.use(protect);
 
 // Get document status (any authenticated user)
 router.get('/status/:requestId', getDocumentStatus);
+
+// Get document preview data (admin/staff only)
+router.get('/preview/:requestId', staffOrAdmin, getDocumentPreview);
 
 // Download document (owner or admin, after payment)
 router.get('/download/:requestId', downloadDocument);

@@ -9,6 +9,11 @@ const { logAction } = require("../utils/logHelper");
 const path = require("path");
 const fs = require("fs");
 const axios = require("axios");
+const crypto = require("crypto");
+
+// QR Code utilities for document verification
+const { generateQRCodeBuffer, generateQRCodeFile } = require("../utils/qrCodeGenerator");
+const { generateVerificationToken, generateSecurityHash } = require("../utils/verificationToken");
 
 // Ensure temp directory exists for photo downloads
 const TEMP_DIR = path.join(__dirname, "..", "temp");
@@ -575,6 +580,30 @@ exports.generateDocumentFile = async (req, res) => {
         /(\d+)(st|nd|rd|th) day of /,
         ""
       ),
+
+      // ========== DIGITAL SIGNATURE FIELDS ==========
+      // Signature date with full timestamp
+      signature_date: new Date().toLocaleString("en-PH", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      }),
+      // Unique signature ID (hash-based)
+      signature_id: crypto
+        .createHash("sha256")
+        .update(
+          `${documentRequest._id}${documentRequest.controlNumber || ""}${Date.now()}`
+        )
+        .digest("hex")
+        .substring(0, 12)
+        .toUpperCase(),
+      // Document ID (same as control number)
+      document_id: documentRequest.controlNumber || getControlNumber(documentRequest),
+      // Verification URL
+      verification_url: `${process.env.FRONTEND_URL || "https://barangayculiat.online"}/verify`,
     };
 
     // ========== PHOTO FOR RESIDENCY DOCUMENTS ==========
@@ -652,6 +681,134 @@ exports.generateDocumentFile = async (req, res) => {
     const imageReplacements = {};
     if (templateData.photo_1x1) {
       imageReplacements.photo_1x1 = templateData.photo_1x1;
+    }
+
+    // ========== QR CODE GENERATION FOR DOCUMENT VERIFICATION ==========
+    console.log(`🔐 Verification token status: ${documentRequest.verificationToken ? 'EXISTS' : 'NOT SET'}`);
+    console.log(`🔐 Control number: ${documentRequest.controlNumber || 'NOT SET'}`);
+    
+    // Generate QR code if document has a verification token
+    if (documentRequest.verificationToken) {
+      try {
+        // Generate QR code image and save temporarily
+        const qrCodeFileName = `qr_${documentRequest.controlNumber.replace(/-/g, '_')}_${Date.now()}`;
+        console.log(`📱 Generating QR code: ${qrCodeFileName}`);
+        const qrCodePath = await generateQRCodeFile(documentRequest.verificationToken, qrCodeFileName, {
+          width: 150,
+          margin: 1
+        });
+        
+        console.log(`📱 QR code path: ${qrCodePath}`);
+        console.log(`📱 QR code exists: ${qrCodePath && fs.existsSync(qrCodePath)}`);
+        
+        if (qrCodePath && fs.existsSync(qrCodePath)) {
+          // Add QR code for template placeholder {%qr_code%}
+          templateData.qr_code = qrCodePath;
+          // Also add for alt-text replacement (if template has image with alt-text "qr_code")
+          imageReplacements.qr_code = qrCodePath;
+          
+          // Add verification URL as text placeholder
+          templateData.verification_url = documentRequest.qrCodeUrl || '';
+          templateData.verification_token = documentRequest.verificationToken;
+          
+          console.log(`📱 QR Code generated for document: ${documentRequest.controlNumber}`);
+          
+          // Clean up QR code file after document generation (delayed cleanup)
+          setTimeout(() => {
+            try {
+              if (fs.existsSync(qrCodePath)) {
+                fs.unlinkSync(qrCodePath);
+              }
+            } catch (cleanupError) {
+              // Silent cleanup failure
+            }
+          }, 60000); // Clean up after 1 minute
+        }
+      } catch (qrError) {
+        console.error('QR Code generation error:', qrError);
+        // Continue without QR code - don't fail the document generation
+      }
+    } else {
+      console.log(`🔐 No verification token, attempting to generate new one...`);
+      
+      // First, ensure we have a control number
+      if (!documentRequest.controlNumber) {
+        console.log(`🔐 No control number found, generating one...`);
+        try {
+          documentRequest.controlNumber = await DocumentRequest.generateControlNumber(
+            documentRequest.documentType
+          );
+          console.log(`🔐 Generated control number: ${documentRequest.controlNumber}`);
+        } catch (cnError) {
+          console.error('Error generating control number:', cnError);
+        }
+      }
+      
+      // Now generate verification token if we have a control number
+      if (documentRequest.controlNumber && !documentRequest.verificationToken) {
+        try {
+          console.log(`🔐 Generating new verification token for control number: ${documentRequest.controlNumber}`);
+          const verificationToken = generateVerificationToken(documentRequest.controlNumber);
+          const securityHash = generateSecurityHash(documentRequest.controlNumber, verificationToken);
+          const { getVerificationUrl } = require("../utils/qrCodeGenerator");
+          
+          documentRequest.verificationToken = verificationToken;
+          documentRequest.verificationSecurityHash = securityHash;
+          documentRequest.verificationGeneratedAt = new Date();
+          documentRequest.documentGeneratedAt = new Date();
+          documentRequest.qrCodeUrl = getVerificationUrl(verificationToken);
+          
+          await documentRequest.save();
+          console.log(`🔐 Token saved: ${verificationToken.slice(0, 20)}...`);
+          console.log(`🔐 QR URL: ${documentRequest.qrCodeUrl}`);
+          
+          // Generate QR code with new token
+          const qrCodeFileName = `qr_${documentRequest.controlNumber.replace(/-/g, '_')}_${Date.now()}`;
+          console.log(`📱 Generating QR code file: ${qrCodeFileName}`);
+          const qrCodePath = await generateQRCodeFile(verificationToken, qrCodeFileName, {
+            width: 150,
+            margin: 1
+          });
+          
+          console.log(`📱 QR code generated at: ${qrCodePath}`);
+          console.log(`📱 QR code file exists: ${qrCodePath && fs.existsSync(qrCodePath)}`);
+          
+          if (qrCodePath && fs.existsSync(qrCodePath)) {
+            templateData.qr_code = qrCodePath;
+            imageReplacements.qr_code = qrCodePath;
+            templateData.verification_url = documentRequest.qrCodeUrl || '';
+            templateData.verification_token = verificationToken;
+            
+            // Update document_id with the new control number
+            templateData.document_id = documentRequest.controlNumber;
+            templateData.control_number = documentRequest.controlNumber;
+            
+            console.log(`📱 QR Code added to imageReplacements. Keys: ${Object.keys(imageReplacements).join(', ')}`);
+            
+            setTimeout(() => {
+              try {
+                if (fs.existsSync(qrCodePath)) {
+                  fs.unlinkSync(qrCodePath);
+                }
+              } catch (cleanupError) {
+                // Silent cleanup failure
+              }
+            }, 60000);
+          }
+        } catch (qrError) {
+          console.error('Error generating verification token:', qrError);
+        }
+      } else {
+        console.log(`🔐 Cannot generate token: controlNumber=${documentRequest.controlNumber ? 'YES' : 'NO'}, verificationToken=${documentRequest.verificationToken ? 'YES' : 'NO'}`);
+      }
+    }
+
+    console.log(`📄 Image replacements to process: ${JSON.stringify(Object.keys(imageReplacements))}`);
+    
+    // Mark document as generated
+    if (!documentRequest.documentGeneratedAt) {
+      documentRequest.documentGeneratedAt = new Date();
+      await documentRequest.save();
     }
 
     // Generate document with both text placeholders and alt-text image replacements
@@ -746,6 +903,183 @@ exports.getDocumentStatus = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to get document status",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * @desc    Get document preview data (all template fields populated, images as URLs)
+ * @route   GET /api/documents/preview/:requestId
+ * @access  Private (Admin/Staff)
+ */
+exports.getDocumentPreview = async (req, res) => {
+  try {
+    const { requestId } = req.params;
+
+    // Fetch the document request with all data
+    const documentRequest = await DocumentRequest.findById(requestId).populate(
+      "applicant",
+      "firstName lastName email phoneNumber photo1x1"
+    );
+
+    if (!documentRequest) {
+      return res.status(404).json({
+        success: false,
+        message: "Document request not found",
+      });
+    }
+
+    // Get barangay settings for officials' names
+    let barangayCaptain = "HON. MALOU G. KATIPUNAN SIOCO";
+    let barangaySecretary = "JENNY B. ENRIQUEZ";
+
+    try {
+      const settings = await Settings.findOne({});
+      if (settings?.barangayInfo?.captain) {
+        barangayCaptain = settings.barangayInfo.captain.toUpperCase();
+      }
+      if (settings?.barangayInfo?.secretary) {
+        barangaySecretary = settings.barangayInfo.secretary.toUpperCase();
+      }
+    } catch (settingsError) {
+      console.log("Using default barangay officials names");
+    }
+
+    // Build preview data object
+    const previewData = {
+      // Document Info
+      documentType: documentRequest.documentType,
+      controlNumber: documentRequest.controlNumber || getControlNumber(documentRequest),
+      referenceNo: generateReferenceNo(documentRequest),
+      documentFileNo: generateDocumentFileNo(documentRequest),
+      issueDate: formatOfficialDate(new Date()),
+      issueDateShort: formatSlashDate(new Date()),
+      validUntil: formatSlashDate(getExpirationDate(new Date())),
+      
+      // Personal Information
+      fullName: buildFullName(
+        documentRequest.firstName,
+        documentRequest.middleName,
+        documentRequest.lastName,
+        documentRequest.suffix
+      ),
+      firstName: (documentRequest.firstName || "").toUpperCase(),
+      middleName: (documentRequest.middleName || "").toUpperCase(),
+      lastName: (documentRequest.lastName || "").toUpperCase(),
+      suffix: (documentRequest.suffix || "").toUpperCase(),
+      
+      // Address
+      fullAddress: buildFullAddress(documentRequest.address),
+      houseNumber: toTitleCase(documentRequest.address?.houseNumber || ""),
+      street: toTitleCase(documentRequest.address?.street || ""),
+      subdivision: toTitleCase(documentRequest.address?.subdivision || ""),
+      barangay: BARANGAY,
+      city: CITY,
+      
+      // Demographics
+      dateOfBirth: documentRequest.dateOfBirth
+        ? formatOfficialDate(documentRequest.dateOfBirth)
+        : "",
+      dateOfBirthShort: formatShortDate(documentRequest.dateOfBirth),
+      age: calculateAge(documentRequest.dateOfBirth),
+      gender: formatGender(documentRequest.gender),
+      civilStatus: formatCivilStatus(documentRequest.civilStatus),
+      nationality: (documentRequest.nationality || "Filipino").toUpperCase(),
+      contactNumber: documentRequest.contactNumber || "",
+      placeOfBirth: (documentRequest.placeOfBirth || "").toUpperCase(),
+      
+      // Additional Personal Fields
+      tinNumber: documentRequest.tinNumber || "None",
+      sssGsisNumber: documentRequest.sssGsisNumber || "None",
+      precinctNumber: documentRequest.precinctNumber || "None",
+      religion: (documentRequest.religion || "").toUpperCase(),
+      heightWeight: documentRequest.heightWeight || "",
+      colorOfHairEyes: documentRequest.colorOfHairEyes || "",
+      occupation: (documentRequest.occupation || "").toUpperCase(),
+      emailAddress: documentRequest.emailAddress || "",
+      
+      // Spouse Information
+      spouseName: (documentRequest.spouseInfo?.name || "").toUpperCase(),
+      spouseOccupation: (documentRequest.spouseInfo?.occupation || "").toUpperCase(),
+      spouseContactNumber: documentRequest.spouseInfo?.contactNumber || "",
+      
+      // Emergency Contact
+      emergencyContactName: (documentRequest.emergencyContact?.fullName || "").toUpperCase(),
+      emergencyContactRelationship: (documentRequest.emergencyContact?.relationship || "").toUpperCase(),
+      emergencyContactNumber: documentRequest.emergencyContact?.contactNumber || "",
+      emergencyContactAddress: buildEmergencyContactAddress(documentRequest.emergencyContact),
+      
+      // Request Information
+      purposeOfRequest: (documentRequest.purposeOfRequest || "").toUpperCase(),
+      remarks: documentRequest.remarks || "",
+      
+      // Officials
+      barangayCaptain,
+      barangaySecretary,
+      preparedBy: req.user?.firstName
+        ? req.user.firstName.charAt(0).toUpperCase() + req.user.firstName.slice(1).toLowerCase()
+        : "",
+      
+      // Business Information
+      businessName: (documentRequest.businessInfo?.businessName || "").toUpperCase(),
+      natureOfBusiness: (documentRequest.businessInfo?.natureOfBusiness || "").toUpperCase(),
+      applicationType: (documentRequest.businessInfo?.applicationType || "").toUpperCase(),
+      businessFullAddress: buildBusinessAddress(documentRequest.businessInfo?.businessAddress),
+      
+      // Beneficiary Information (for rehab)
+      beneficiaryName: (documentRequest.beneficiaryInfo?.fullName || "").toUpperCase(),
+      beneficiaryAge: documentRequest.beneficiaryInfo?.age?.toString() || "",
+      beneficiaryRelationship: (documentRequest.beneficiaryInfo?.relationship || "").toUpperCase(),
+      
+      // Images (URLs for preview)
+      photo1x1: documentRequest.photo1x1?.url || documentRequest.photo1x1 || null,
+      
+      // QR Code - Generate data URL for preview
+      qrCodeDataUrl: null,
+      verificationToken: documentRequest.verificationToken || null,
+      verificationUrl: documentRequest.qrCodeUrl || null,
+      
+      // Status
+      status: documentRequest.status,
+      paymentStatus: documentRequest.paymentStatus,
+    };
+
+    // Generate QR code data URL for preview
+    if (documentRequest.verificationToken) {
+      try {
+        const { generateQRCodeDataUrl } = require("../utils/qrCodeGenerator");
+        previewData.qrCodeDataUrl = await generateQRCodeDataUrl(documentRequest.verificationToken, {
+          width: 150,
+          margin: 1
+        });
+      } catch (qrError) {
+        console.error("QR Code preview generation error:", qrError);
+      }
+    } else if (documentRequest.controlNumber) {
+      // Generate token if not exists and create QR
+      try {
+        const verificationToken = generateVerificationToken(documentRequest.controlNumber);
+        const { generateQRCodeDataUrl } = require("../utils/qrCodeGenerator");
+        previewData.qrCodeDataUrl = await generateQRCodeDataUrl(verificationToken, {
+          width: 150,
+          margin: 1
+        });
+        previewData.verificationToken = verificationToken;
+      } catch (qrError) {
+        console.error("QR Code preview generation error:", qrError);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      data: previewData,
+    });
+  } catch (error) {
+    console.error("Error getting document preview:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to get document preview",
       error: error.message,
     });
   }

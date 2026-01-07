@@ -60,6 +60,9 @@ app.use("/api/profile-verification", require("./routes/profileVerificationRoute"
 // Profile update routes (for residents to update their profile)
 app.use("/api/profile-update", require("./routes/profileUpdateRoute"));
 
+// PUBLIC: Document QR Code verification routes (no auth required)
+app.use("/api/verify", require("./routes/verificationRoute"));
+
 
 // Health check route
 app.get("/api/health", (req, res) => {

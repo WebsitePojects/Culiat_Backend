@@ -363,10 +363,26 @@ exports.login = async (req, res) => {
     // Find user by username with password field
     const user = await User.findOne({ username }).select("+password");
 
-    if (!user || !user.isActive) {
+    // Debug logging
+    console.log("Login attempt for:", username);
+    console.log("User found:", user ? "Yes" : "No");
+    if (user) {
+      console.log("User isActive:", user.isActive);
+      console.log("User role:", user.role);
+      console.log("User registrationStatus:", user.registrationStatus);
+    }
+
+    if (!user) {
       return res.status(401).json({
         success: false,
-        message: "Invalid credentials",
+        message: "Invalid credentials - user not found",
+      });
+    }
+
+    if (user.isActive === false) {
+      return res.status(401).json({
+        success: false,
+        message: "Account is deactivated. Please contact administrator.",
       });
     }
 
@@ -945,9 +961,9 @@ exports.createUser = async (req, res) => {
       });
     }
 
-    // Hash password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password || "TempPassword123!", salt);
+    // Use provided password or default temporary password
+    // Note: Password will be hashed by the User model's pre-save hook
+    const userPassword = password || "TempPassword123!";
 
     // Create user
     const user = await User.create({
@@ -957,7 +973,7 @@ exports.createUser = async (req, res) => {
       username,
       phoneNumber,
       role, // Role code from frontend
-      password: hashedPassword,
+      password: userPassword,
       registrationStatus: "approved", // Auto-approve admin-created users
       isActive: true,
     });
@@ -1113,6 +1129,40 @@ exports.deleteUserById = async (req, res) => {
   }
 };
 
+// @desc    Admin Reset User Password
+// @route   PUT /api/auth/users/:userId/reset-password
+// @access  Private/Admin
+exports.adminResetPassword = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { newPassword } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Set new password (pre-save hook will hash it)
+    user.password = newPassword || "TempPassword123!";
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Password reset successfully for ${user.firstName} ${user.lastName}. New password: ${newPassword || "TempPassword123!"}`,
+    });
+  } catch (error) {
+    console.error("Error resetting user password:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error resetting user password",
+      error: error.message,
+    });
+  }
+};
+
 // @desc    Forgot Password
 // @route   POST /api/auth/forgotpassword
 // @access  Public
@@ -1198,9 +1248,8 @@ exports.resetPassword = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid Token" });
     }
 
-    // Set new password
-    const salt = await bcrypt.genSalt(10);
-    user.password = await bcrypt.hash(req.body.password, salt);
+    // Set new password (pre-save hook will hash it)
+    user.password = req.body.password;
 
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;

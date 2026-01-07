@@ -5,6 +5,10 @@ const { logAction } = require("../utils/logHelper");
 const ROLES = require("../config/roles");
 const path = require("path");
 
+// QR Code Verification utilities
+const { generateVerificationToken, generateSecurityHash } = require("../utils/verificationToken");
+const { getVerificationUrl } = require("../utils/qrCodeGenerator");
+
 // Check if using Cloudinary
 const isCloudinaryEnabled = () => {
   return process.env.CLOUDINARY_CLOUD_NAME && 
@@ -360,6 +364,18 @@ exports.updateRequestStatus = async (req, res) => {
       request.controlNumber = await DocumentRequest.generateControlNumber(
         request.documentType
       );
+      
+      // Generate verification token and QR code data
+      const verificationToken = generateVerificationToken(request.controlNumber);
+      const securityHash = generateSecurityHash(request.controlNumber, verificationToken);
+      
+      request.verificationToken = verificationToken;
+      request.verificationSecurityHash = securityHash;
+      request.verificationGeneratedAt = new Date();
+      request.qrCodeUrl = getVerificationUrl(verificationToken);
+      
+      console.log(`✅ Generated verification token for ${request.controlNumber}`);
+      console.log(`📱 QR Verification URL: ${request.qrCodeUrl}`);
     }
 
     request.status = status;

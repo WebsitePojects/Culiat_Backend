@@ -15,6 +15,7 @@ const {
   createUser,
   updateUserById,
   deleteUserById,
+  adminResetPassword,
   forgotPassword,
   resetPassword,
 } = require("../controllers/authController");
@@ -90,6 +91,12 @@ router.delete(
   protect,
   authorize(ROLES.SuperAdmin, ROLES.Admin),
   deleteUserById
+);
+router.put(
+  "/users/:userId/reset-password",
+  protect,
+  authorize(ROLES.SuperAdmin, ROLES.Admin),
+  adminResetPassword
 );
 router.get(
   "/pending-registrations",
