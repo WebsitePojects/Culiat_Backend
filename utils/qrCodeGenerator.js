@@ -20,7 +20,7 @@ if (!fs.existsSync(tempDir)) {
  */
 const getVerificationUrl = (token) => {
   // Use environment variable for base URL, fallback to default
-  const baseUrl = process.env.FRONTEND_URL || 'https://barangayculiat.online';
+  const baseUrl = process.env.FRONTEND_URL || 'https://barangayculiat.com';
   return `${baseUrl}/verify/${token}`;
 };
 

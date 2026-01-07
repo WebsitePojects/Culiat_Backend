@@ -143,7 +143,7 @@ const verifyDocument = async (req, res) => {
         name: 'Barangay Culiat',
         location: 'Quezon City, Metro Manila',
         contact: 'barangayculiat@gmail.com',
-        website: 'https://barangayculiat.online'
+        website: 'https://barangayculiat.com'
       },
       verificationInfo: {
         verifiedAt: new Date().toISOString(),

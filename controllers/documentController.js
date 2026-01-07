@@ -603,7 +603,7 @@ exports.generateDocumentFile = async (req, res) => {
       // Document ID (same as control number)
       document_id: documentRequest.controlNumber || getControlNumber(documentRequest),
       // Verification URL
-      verification_url: `${process.env.FRONTEND_URL || "https://barangayculiat.online"}/verify`,
+      verification_url: `${process.env.FRONTEND_URL || "https://barangayculiat.com"}/verify`,
     };
 
     // ========== PHOTO FOR RESIDENCY DOCUMENTS ==========
