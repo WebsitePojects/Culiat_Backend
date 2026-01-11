@@ -359,6 +359,11 @@ exports.verifyPayment = async (req, res) => {
         if (sessionStatus === "succeeded") {
           documentRequest.paymentStatus = "paid";
           documentRequest.paidAt = new Date();
+          // Auto-update status to completed when payment is verified
+          if (documentRequest.status === "approved") {
+            documentRequest.status = "completed";
+            documentRequest.processedAt = new Date();
+          }
           await documentRequest.save();
 
           await logAction(
@@ -435,6 +440,13 @@ exports.confirmPayment = async (req, res) => {
     if (referenceNumber) {
       documentRequest.paymentReference = referenceNumber;
     }
+    
+    // Auto-update status to completed when payment is verified
+    if (documentRequest.status === "approved") {
+      documentRequest.status = "completed";
+      documentRequest.processedAt = new Date();
+    }
+    
     await documentRequest.save();
 
     await logAction(
@@ -488,6 +500,13 @@ exports.waivePayment = async (req, res) => {
 
     documentRequest.paymentStatus = "waived";
     documentRequest.paymentWaivedReason = reason || "Fee waived by admin";
+    
+    // Auto-update status to completed when payment is waived
+    if (documentRequest.status === "approved") {
+      documentRequest.status = "completed";
+      documentRequest.processedAt = new Date();
+    }
+    
     await documentRequest.save();
 
     await logAction(
@@ -558,6 +577,11 @@ exports.webhook = async (req, res) => {
         if (documentRequest) {
           documentRequest.paymentStatus = "paid";
           documentRequest.paidAt = new Date();
+          // Auto-update status to completed when payment is verified via webhook
+          if (documentRequest.status === "approved") {
+            documentRequest.status = "completed";
+            documentRequest.processedAt = new Date();
+          }
           await documentRequest.save();
         }
       }
@@ -576,6 +600,11 @@ exports.webhook = async (req, res) => {
         if (documentRequest) {
           documentRequest.paymentStatus = "paid";
           documentRequest.paidAt = new Date();
+          // Auto-update status to completed when payment is verified via webhook
+          if (documentRequest.status === "approved") {
+            documentRequest.status = "completed";
+            documentRequest.processedAt = new Date();
+          }
           await documentRequest.save();
         }
       }
@@ -594,6 +623,11 @@ exports.webhook = async (req, res) => {
         if (documentRequest) {
           documentRequest.paymentStatus = "paid";
           documentRequest.paidAt = new Date();
+          // Auto-update status to completed when payment is verified via webhook
+          if (documentRequest.status === "approved") {
+            documentRequest.status = "completed";
+            documentRequest.processedAt = new Date();
+          }
           await documentRequest.save();
         }
       }

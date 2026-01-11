@@ -146,18 +146,22 @@ exports.createOfficial = async (req, res) => {
       photoUrl = req.file.path || req.file.secure_url || req.file.url;
     }
 
+    // Convert string boolean to actual boolean (from FormData)
+    const isActiveValue = isActive === 'true' || isActive === true;
+    const displayOrderValue = typeof displayOrder === 'string' ? parseInt(displayOrder, 10) : displayOrder || 0;
+
     const official = await Official.create({
       firstName,
       lastName,
       middleName,
       position,
       committee,
-      isActive,
+      isActive: isActiveValue,
       contactNumber,
       email,
       photo: photoUrl,
       bio,
-      displayOrder,
+      displayOrder: displayOrderValue,
       termStart,
       termEnd,
     });
@@ -218,11 +222,21 @@ exports.updateOfficial = async (req, res) => {
     if (middleName !== undefined) updateData.middleName = middleName;
     if (position !== undefined) updateData.position = position;
     if (committee !== undefined) updateData.committee = committee;
-    if (isActive !== undefined) updateData.isActive = isActive;
+    
+    // Convert string boolean to actual boolean (from FormData)
+    if (isActive !== undefined) {
+      updateData.isActive = isActive === 'true' || isActive === true;
+    }
+    
     if (contactNumber !== undefined) updateData.contactNumber = contactNumber;
     if (email !== undefined) updateData.email = email;
     if (bio !== undefined) updateData.bio = bio;
-    if (displayOrder !== undefined) updateData.displayOrder = displayOrder;
+    
+    // Convert displayOrder to number if it's a string
+    if (displayOrder !== undefined) {
+      updateData.displayOrder = typeof displayOrder === 'string' ? parseInt(displayOrder, 10) : displayOrder;
+    }
+    
     if (termStart !== undefined) updateData.termStart = termStart;
     if (termEnd !== undefined) updateData.termEnd = termEnd;
 

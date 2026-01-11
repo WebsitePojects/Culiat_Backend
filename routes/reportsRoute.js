@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const {
   createReport,
+  createAnonymousReport,
   getAllReports,
   getMyReports,
   getReport,
@@ -15,6 +16,9 @@ const { upload } = require('../middleware/fileUpload');
 
 // Upload middleware for report images (max 5 images)
 const reportImageUpload = upload.array('reportImages', 5);
+
+// Anonymous report route - NO authentication required
+router.post('/anonymous', reportImageUpload, createAnonymousReport);
 
 router.post('/', protect, reportImageUpload, createReport); // Protected - authenticated users can report
 router.get('/', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), getAllReports);

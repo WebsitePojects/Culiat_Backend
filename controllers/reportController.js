@@ -43,6 +43,7 @@ exports.createReport = async (req, res) => {
       priority,
       images,
       reportedBy: req.user?._id,
+      isAnonymous: false,
     });
 
     res.status(201).json({
@@ -60,6 +61,58 @@ exports.createReport = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Error creating report",
+      error: error.message,
+    });
+  }
+};
+
+// @desc    Create an anonymous report (no auth required)
+// @route   POST /api/reports/anonymous
+// @access  Public
+exports.createAnonymousReport = async (req, res) => {
+  try {
+    const { title, description, category, location, priority, anonymousContact } = req.body;
+
+    // Handle image uploads
+    const images = [];
+    if (req.files && req.files.length > 0) {
+      req.files.forEach(file => {
+        const imageUrl = getImageUrl(file);
+        if (imageUrl) images.push(imageUrl);
+      });
+    }
+
+    const report = await Report.create({
+      title,
+      description,
+      category,
+      location,
+      priority,
+      images,
+      isAnonymous: true,
+      anonymousContact: anonymousContact || null,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Anonymous report submitted successfully",
+      data: {
+        _id: report._id,
+        title: report.title,
+        status: report.status,
+        createdAt: report.createdAt,
+      },
+    });
+    
+    await logAction(
+      LOGCONSTANTS.actions.reports.CREATE_REPORT,
+      `Anonymous report created: ${report._id}`,
+      null
+    );
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error creating anonymous report",
       error: error.message,
     });
   }

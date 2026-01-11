@@ -25,6 +25,9 @@ const officialSchema = new mongoose.Schema({
       'barangay_secretary',
       'barangay_treasurer',
       'administrative_officer',
+      'admin_officer_internal',
+      'admin_officer_external',
+      'executive_officer',
       'deputy_officer',
       'other'
     ],
