@@ -315,7 +315,8 @@ const createCorsConfig = (allowedOrigins = []) => {
       // Check if origin is in allowed list or matches production patterns
       if (origins.includes(origin) || 
           origin.endsWith('.vercel.app') || 
-          origin.endsWith('.netlify.app')) {
+          origin.endsWith('.netlify.app') ||
+          origin.includes('barangayculiat.com')) {
         return callback(null, true);
       }
       
@@ -324,6 +325,7 @@ const createCorsConfig = (allowedOrigins = []) => {
         return callback(null, true);
       }
       
+      console.error('[CORS] Origin not allowed:', origin);
       return callback(new Error('Not allowed by CORS'));
     },
     credentials: true,
