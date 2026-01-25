@@ -24,6 +24,14 @@ const AchievementSchema = new mongoose.Schema({
     type: String,
     default: 'no-photo.jpg'
   },
+  images: [{
+    type: String
+  }],
+  // Hashtags for the achievement (optional)
+  hashtags: [{
+    type: String,
+    trim: true,
+  }],
   createdAt: {
     type: Date,
     default: Date.now

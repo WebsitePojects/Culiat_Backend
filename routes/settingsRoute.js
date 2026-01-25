@@ -9,11 +9,15 @@ const {
   updateFooter,
   updateTheme,
   resetSettings,
+  getMaintenanceStatus,
 } = require("../controllers/settingsController");
 const { protect, authorize } = require("../middleware/auth");
 
 // Public route - get public settings
 router.get("/", getSettings);
+
+// Public route - get maintenance status
+router.get("/maintenance-status", getMaintenanceStatus);
 
 // Protected routes - Admin only
 router.put("/", protect, authorize("Admin", "SuperAdmin"), updateSettings);
@@ -37,6 +41,7 @@ router.put(
 );
 router.put("/footer", protect, authorize("Admin", "SuperAdmin"), updateFooter);
 router.put("/theme", protect, authorize("Admin", "SuperAdmin"), updateTheme);
+router.put("/system", protect, authorize("Admin", "SuperAdmin"), updateSettings);
 
 // SuperAdmin only
 router.post("/reset", protect, authorize("SuperAdmin"), resetSettings);

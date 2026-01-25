@@ -2,18 +2,53 @@ const Announcement = require('../models/Announcement');
 const { LOGCONSTANTS } = require('../config/logConstants');
 const { getRoleName } = require('../utils/roleHelpers');
 const { logAction } = require('../utils/logHelper');
+const { deleteFromCloudinary, getPublicIdFromUrl } = require('../config/cloudinary');
+
+// Check if using Cloudinary
+const isCloudinaryEnabled = () => {
+  return process.env.CLOUDINARY_CLOUD_NAME && 
+         process.env.CLOUDINARY_API_KEY && 
+         process.env.CLOUDINARY_API_SECRET;
+};
+
+// Helper to get image URL from uploaded file
+const getImageUrl = (file) => {
+  if (!file) return null;
+  // Cloudinary returns the URL in file.path
+  return isCloudinaryEnabled() ? file.path : `/uploads/announcements/${file.filename}`;
+};
 
 // @desc    Create new announcement
 // @route   POST /api/announcements
 // @access  Private (Admin)
 exports.createAnnouncement = async (req, res) => {
   try {
-    const { title, content, category, priority, publishDate, expiryDate, location, eventDate, status } = req.body;
+    const { title, content, category, priority, publishDate, expiryDate, location, eventDate, status, hashtags } = req.body;
     
-    // Handle image upload
-    let imageUrl = null;
+    // Handle multiple image uploads (up to 6)
+    const images = [];
+    if (req.files && req.files.length > 0) {
+      req.files.forEach(file => {
+        const imageUrl = getImageUrl(file);
+        if (imageUrl) images.push(imageUrl);
+      });
+    }
+    
+    // Also handle single image upload for backward compatibility
+    let singleImageUrl = null;
     if (req.file) {
-      imageUrl = req.file.path || req.file.location || `/uploads/announcements/${req.file.filename}`;
+      singleImageUrl = getImageUrl(req.file);
+    }
+
+    // Parse hashtags if it's a JSON string
+    let parsedHashtags = [];
+    if (hashtags) {
+      try {
+        parsedHashtags = typeof hashtags === 'string' ? JSON.parse(hashtags) : hashtags;
+      } catch (e) {
+        // If not valid JSON, try to split by comma
+        parsedHashtags = typeof hashtags === 'string' ? hashtags.split(',').map(h => h.trim()).filter(Boolean) : [];
+      }
     }
 
     const announcement = await Announcement.create({
@@ -27,7 +62,9 @@ exports.createAnnouncement = async (req, res) => {
       eventDate,
       status: status || 'draft',
       isPublished: status === 'published',
-      image: imageUrl,
+      images: images.length > 0 ? images : (singleImageUrl ? [singleImageUrl] : []),
+      image: images.length > 0 ? images[0] : singleImageUrl, // Keep first image for backward compatibility
+      hashtags: parsedHashtags,
       publishedBy: req.user._id,
     });
 
@@ -150,9 +187,26 @@ exports.getAnnouncement = async (req, res) => {
       });
     }
 
-    // Increment views
-    announcement.views = (announcement.views || 0) + 1;
-    await announcement.save();
+    // Get visitor ID from header or generate one based on IP + User Agent
+    const visitorId = req.headers['x-visitor-id'] || 
+                      `${req.ip || req.connection?.remoteAddress || 'unknown'}_${(req.headers['user-agent'] || 'unknown').slice(0, 50)}`;
+    
+    // Check if this visitor has already viewed this announcement
+    const hasViewed = announcement.viewedBy?.some(v => v.visitorId === visitorId);
+    
+    if (!hasViewed) {
+      // First time viewing - increment views and record visitor
+      announcement.views = (announcement.views || 0) + 1;
+      announcement.viewedBy = announcement.viewedBy || [];
+      announcement.viewedBy.push({ visitorId, viewedAt: new Date() });
+      
+      // Keep only last 1000 viewers to prevent bloat
+      if (announcement.viewedBy.length > 1000) {
+        announcement.viewedBy = announcement.viewedBy.slice(-1000);
+      }
+      
+      await announcement.save();
+    }
 
     res.status(200).json({
       success: true,
@@ -172,7 +226,7 @@ exports.getAnnouncement = async (req, res) => {
 // @access  Private (Admin)
 exports.updateAnnouncement = async (req, res) => {
   try {
-    const { title, content, category, priority, isPublished, publishDate, expiryDate, location, eventDate, status } = req.body;
+    const { title, content, category, priority, isPublished, publishDate, expiryDate, location, eventDate, status, removeImages, hashtags } = req.body;
 
     let announcement = await Announcement.findById(req.params.id);
 
@@ -183,10 +237,53 @@ exports.updateAnnouncement = async (req, res) => {
       });
     }
 
-    // Handle image upload
-    let imageUrl = announcement.image;
+    // Handle multiple image uploads
+    let images = announcement.images || [];
+    
+    // Parse removeImages if it's a string (from FormData)
+    let imagesToRemove = [];
+    if (removeImages) {
+      try {
+        imagesToRemove = typeof removeImages === 'string' ? JSON.parse(removeImages) : removeImages;
+      } catch (e) {
+        imagesToRemove = [];
+      }
+    }
+    
+    // Remove specified images
+    if (imagesToRemove.length > 0) {
+      // Delete from Cloudinary if enabled
+      if (isCloudinaryEnabled()) {
+        for (const imageUrl of imagesToRemove) {
+          try {
+            const publicId = getPublicIdFromUrl(imageUrl);
+            if (publicId) {
+              await deleteFromCloudinary(publicId);
+            }
+          } catch (err) {
+            console.error('Error deleting image from Cloudinary:', err);
+          }
+        }
+      }
+      images = images.filter(img => !imagesToRemove.includes(img));
+    }
+    
+    // Add new images
+    if (req.files && req.files.length > 0) {
+      req.files.forEach(file => {
+        const imageUrl = getImageUrl(file);
+        if (imageUrl && images.length < 6) {
+          images.push(imageUrl);
+        }
+      });
+    }
+    
+    // Also handle single image upload for backward compatibility
     if (req.file) {
-      imageUrl = req.file.path || req.file.location || `/uploads/announcements/${req.file.filename}`;
+      const imageUrl = getImageUrl(req.file);
+      if (imageUrl && images.length < 6) {
+        images.push(imageUrl);
+      }
     }
 
     // Build update object
@@ -199,8 +296,22 @@ exports.updateAnnouncement = async (req, res) => {
       eventDate: eventDate || announcement.eventDate,
       publishDate,
       expiryDate,
-      image: imageUrl,
+      images: images,
+      image: images.length > 0 ? images[0] : null, // Keep first image for backward compatibility
     };
+
+    // Handle hashtags
+    if (hashtags !== undefined) {
+      let parsedHashtags = [];
+      if (hashtags) {
+        try {
+          parsedHashtags = typeof hashtags === 'string' ? JSON.parse(hashtags) : hashtags;
+        } catch (e) {
+          parsedHashtags = typeof hashtags === 'string' ? hashtags.split(',').map(h => h.trim()).filter(Boolean) : [];
+        }
+      }
+      updateData.hashtags = parsedHashtags;
+    }
 
     // Handle status updates
     if (status) {

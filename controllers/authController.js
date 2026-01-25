@@ -2,6 +2,7 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const User = require("../models/User");
+const Settings = require("../models/Settings");
 const { LOGCONSTANTS } = require("../config/logConstants");
 const { getRoleName } = require("../utils/roleHelpers");
 const { logAction } = require("../utils/logHelper");
@@ -36,6 +37,15 @@ const generateToken = (id) => {
 // @access  Public
 exports.register = async (req, res) => {
   try {
+    // Check if registration is enabled in system settings
+    const settings = await Settings.getSettings();
+    if (!settings.system.registrationEnabled) {
+      return res.status(403).json({
+        success: false,
+        message: "Registration is currently disabled. Please try again later.",
+      });
+    }
+
     // Debug: Log received files
     console.log('📁 Received files:', req.files ? Object.keys(req.files) : 'none');
     console.log('📝 Received body keys:', Object.keys(req.body));
@@ -64,6 +74,8 @@ exports.register = async (req, res) => {
       heightWeight,
       colorOfHairEyes,
       occupation,
+      // Sectoral Groups (array)
+      sectoralGroups,
       // Address (nested object)
       address,
       // Spouse info (nested object)
@@ -283,6 +295,7 @@ exports.register = async (req, res) => {
       heightWeight,
       colorOfHairEyes,
       occupation,
+      sectoralGroups: sectoralGroups ? (Array.isArray(sectoralGroups) ? sectoralGroups : JSON.parse(sectoralGroups)) : [],
       address,
       spouseInfo,
       emergencyContact,

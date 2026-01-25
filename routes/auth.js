@@ -22,6 +22,7 @@ const {
 const { protect, authorize } = require("../middleware/auth");
 const ROLES = require("../config/roles");
 const { upload } = require("../middleware/fileUpload");
+const { rateLimiters } = require("../middleware/securityMiddleware");
 
 // Multer error handler wrapper
 const handleMulterUpload = (req, res, next) => {
@@ -51,17 +52,19 @@ const handleMulterUpload = (req, res, next) => {
 
 router.post(
   "/register",
+  rateLimiters.registration,  // Strict rate limiting for registration
   handleMulterUpload,
   register
 );
 router.post(
   "/resident-register",
+  rateLimiters.registration,  // Strict rate limiting for registration
   upload.single("proofOfResidency"),
   residentRegister
 );
-router.post("/login", login);
-router.post("/forgotpassword", forgotPassword);
-router.put("/resetpassword/:resetToken", resetPassword);
+router.post("/login", rateLimiters.auth, login);  // Strict rate limiting for login
+router.post("/forgotpassword", rateLimiters.passwordReset, forgotPassword);  // Rate limit password reset
+router.put("/resetpassword/:resetToken", rateLimiters.passwordReset, resetPassword);
 router.post("/adminRegister", adminRegister);
 router.get("/me", protect, getMe);
 router.put("/profile", protect, updateProfile);

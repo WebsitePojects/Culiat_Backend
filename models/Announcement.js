@@ -45,6 +45,11 @@ const announcementSchema = new mongoose.Schema({
     type: String,
     default: 'Barangay Culiat',
   },
+  // Support for multiple images (up to 6)
+  images: [{
+    type: String,
+  }],
+  // Keep legacy image field for backward compatibility
   image: {
     type: String,
     default: null,
@@ -72,6 +77,19 @@ const announcementSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  // Track unique viewers to prevent duplicate view counts
+  viewedBy: [{
+    visitorId: String,  // Can be session ID, fingerprint, or user ID
+    viewedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+  // Hashtags for the announcement (optional)
+  hashtags: [{
+    type: String,
+    trim: true,
+  }],
   createdAt: {
     type: Date,
     default: Date.now,

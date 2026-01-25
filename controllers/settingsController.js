@@ -1,5 +1,32 @@
 const Settings = require("../models/Settings");
 const { logAction } = require("../utils/logHelper");
+const { LOGCONSTANTS } = require("../config/logConstants");
+
+// @desc    Get maintenance status
+// @route   GET /api/settings/maintenance-status
+// @access  Public
+exports.getMaintenanceStatus = async (req, res) => {
+  try {
+    const settings = await Settings.getSettings();
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        maintenanceMode: settings.system.maintenanceMode || false,
+        message: settings.system.maintenanceMode 
+          ? "System is currently under maintenance. Please try again later." 
+          : null,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching maintenance status:", error);
+    res.status(500).json({
+      success: false,
+      maintenanceMode: false,
+      message: null,
+    });
+  }
+};
 
 // @desc    Get settings
 // @route   GET /api/settings
@@ -84,9 +111,11 @@ exports.updateSettings = async (req, res) => {
     await settings.save();
 
     // Log the action
-    await logAction(req.user._id, "UPDATE_SETTINGS", "Settings", settings._id, {
-      updatedFields: Object.keys(req.body),
-    });
+    await logAction(
+      LOGCONSTANTS.actions.settings.UPDATE_SETTINGS,
+      `Settings updated: ${Object.keys(req.body).join(", ")}`,
+      req.user
+    );
 
     res.status(200).json({
       success: true,
@@ -119,11 +148,9 @@ exports.updateSiteInfo = async (req, res) => {
     await settings.save();
 
     await logAction(
-      req.user._id,
-      "UPDATE_SITE_INFO",
-      "Settings",
-      settings._id,
-      { siteInfo: req.body }
+      LOGCONSTANTS.actions.settings.UPDATE_SITE_INFO,
+      `Site information updated: ${req.body.name || 'N/A'}`,
+      req.user
     );
 
     res.status(200).json({
@@ -157,11 +184,9 @@ exports.updateContactInfo = async (req, res) => {
     await settings.save();
 
     await logAction(
-      req.user._id,
-      "UPDATE_CONTACT_INFO",
-      "Settings",
-      settings._id,
-      { contactInfo: req.body }
+      LOGCONSTANTS.actions.settings.UPDATE_CONTACT_INFO,
+      `Contact information updated`,
+      req.user
     );
 
     res.status(200).json({
@@ -195,11 +220,9 @@ exports.updateSocialMedia = async (req, res) => {
     await settings.save();
 
     await logAction(
-      req.user._id,
-      "UPDATE_SOCIAL_MEDIA",
-      "Settings",
-      settings._id,
-      { socialMedia: req.body }
+      LOGCONSTANTS.actions.settings.UPDATE_SOCIAL_MEDIA,
+      `Social media links updated`,
+      req.user
     );
 
     res.status(200).json({
@@ -235,8 +258,10 @@ exports.updateFooter = async (req, res) => {
     await logAction(req.user._id, "UPDATE_FOOTER", "Settings", settings._id, {
       footer: req.body,
     });
-
-    res.status(200).json({
+      LOGCONSTANTS.actions.settings.UPDATE_FOOTER,
+      `Footer settings updated`,
+      req.user
+    es.status(200).json({
       success: true,
       message: "Footer settings updated successfully",
       data: settings.footer,
@@ -266,9 +291,11 @@ exports.updateTheme = async (req, res) => {
     settings.lastModifiedBy = req.user._id;
     await settings.save();
 
-    await logAction(req.user._id, "UPDATE_THEME", "Settings", settings._id, {
-      theme: req.body,
-    });
+    await logAction(
+      LOGCONSTANTS.actions.settings.UPDATE_THEME,
+      `Theme settings updated`,
+      req.user
+    );
 
     res.status(200).json({
       success: true,
@@ -298,9 +325,11 @@ exports.resetSettings = async (req, res) => {
       lastModifiedBy: req.user._id,
     });
 
-    await logAction(req.user._id, "RESET_SETTINGS", "Settings", settings._id, {
-      message: "Settings reset to default",
-    });
+    await logAction(
+      LOGCONSTANTS.actions.settings.RESET_SETTINGS,
+      `Settings reset to default`,
+      req.user
+    );
 
     res.status(200).json({
       success: true,

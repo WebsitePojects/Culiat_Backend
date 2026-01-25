@@ -1,4 +1,5 @@
 const Report = require("../models/Report");
+const Settings = require("../models/Settings");
 const { LOGCONSTANTS } = require("../config/logConstants");
 const { getRoleName } = require('../utils/roleHelpers');
 const { logAction } = require('../utils/logHelper');
@@ -24,6 +25,15 @@ const getImageUrl = (file) => {
 // @access  Private (Resident/Admin)
 exports.createReport = async (req, res) => {
   try {
+    // Check if reporting is enabled in system settings
+    const settings = await Settings.getSettings();
+    if (!settings.system.reportingEnabled) {
+      return res.status(403).json({
+        success: false,
+        message: "Report submissions are currently disabled. Please try again later.",
+      });
+    }
+
     const { title, description, category, location, priority } = req.body;
 
     // Handle image uploads
@@ -71,6 +81,15 @@ exports.createReport = async (req, res) => {
 // @access  Public
 exports.createAnonymousReport = async (req, res) => {
   try {
+    // Check if reporting is enabled in system settings
+    const settings = await Settings.getSettings();
+    if (!settings.system.reportingEnabled) {
+      return res.status(403).json({
+        success: false,
+        message: "Report submissions are currently disabled. Please try again later.",
+      });
+    }
+
     const { title, description, category, location, priority, anonymousContact } = req.body;
 
     // Handle image uploads

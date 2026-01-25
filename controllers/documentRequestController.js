@@ -1,5 +1,6 @@
 const DocumentRequest = require("../models/DocumentRequest");
 const Picture = require("../models/Picture");
+const Settings = require("../models/Settings");
 const { LOGCONSTANTS } = require("../config/logConstants");
 const { getRoleName } = require("../utils/roleHelpers");
 const { logAction } = require("../utils/logHelper");
@@ -30,6 +31,15 @@ const getFileUrl = (file) => {
 // @access  Private (Resident/Admin)
 exports.createDocumentRequest = async (req, res) => {
   try {
+    // Check if document requests are enabled in system settings
+    const settings = await Settings.getSettings();
+    if (!settings.system.documentRequestEnabled) {
+      return res.status(403).json({
+        success: false,
+        message: "Document requests are currently disabled. Please try again later.",
+      });
+    }
+
     const payload = req.body || {};
 
     // Fetch user profile to get stored files if needed

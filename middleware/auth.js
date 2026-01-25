@@ -43,10 +43,29 @@ exports.protect = async (req, res, next) => {
 // Role-based authorization
 exports.authorize = (...roles) => {
   return (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
+    // Get user's role (could be role code or role name)
+    const userRole = req.user.role;
+    const userRoleName = req.user.roleName;
+    
+    // Check if user's role matches any of the allowed roles
+    // Support both role codes (74932, 74933, 74934) and role names ('Admin', 'SuperAdmin', 'Resident')
+    const isAuthorized = roles.some(role => {
+      // If role is a string name, check against both roleName and ROLES mapping
+      if (typeof role === 'string') {
+        // Check if roleName matches
+        if (userRoleName === role) return true;
+        // Check if role code matches the ROLES mapping
+        if (ROLES[role] && userRole === ROLES[role]) return true;
+      }
+      // If role is a number (role code), check directly
+      if (typeof role === 'number' && userRole === role) return true;
+      return false;
+    });
+    
+    if (!isAuthorized) {
       return res.status(403).json({
         success: false,
-        message: `User role '${req.user.role}' is not authorized to access this route`,
+        message: `User role is not authorized to access this route`,
       });
     }
     next();

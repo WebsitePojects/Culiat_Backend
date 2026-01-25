@@ -954,3 +954,117 @@ exports.getUserDemographics = async (req, res) => {
     });
   }
 };
+
+/**
+ * @route   GET /api/analytics/sectoral-groups
+ * @desc    Get sectoral groups statistics for analytics dashboard
+ * @access  Private (Admin)
+ */
+exports.getSectoralGroupsStats = async (req, res) => {
+  try {
+    // Get all approved residents with sectoral groups
+    const baseFilter = {
+      role: 74934, // Resident role
+      registrationStatus: "approved"
+    };
+
+    const totalResidents = await User.countDocuments(baseFilter);
+
+    // Aggregate sectoral groups counts
+    const sectoralStats = await User.aggregate([
+      { $match: baseFilter },
+      { $unwind: { path: "$sectoralGroups", preserveNullAndEmptyArrays: false } },
+      {
+        $group: {
+          _id: "$sectoralGroups",
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { count: -1 } }
+    ]);
+
+    // Define all sectoral groups with labels
+    const sectoralLabels = {
+      'senior': 'Senior Citizens (60+)',
+      'woman': 'Women',
+      'youth': 'Youth (15-30)',
+      'solo_parent': 'Solo Parents',
+      'pwd': 'Persons with Disabilities (PWD)'
+    };
+
+    // Map to include all groups with proper formatting
+    const allSectoralGroups = ['senior', 'woman', 'youth', 'solo_parent', 'pwd'];
+    const formattedStats = allSectoralGroups.map(group => {
+      const stat = sectoralStats.find(s => s._id === group);
+      return {
+        id: group,
+        label: sectoralLabels[group] || group,
+        count: stat ? stat.count : 0,
+        percentage: totalResidents > 0 ? ((stat?.count || 0) / totalResidents * 100).toFixed(1) : '0.0'
+      };
+    });
+
+    // Get users with multiple sectoral group affiliations
+    const usersWithGroups = await User.countDocuments({
+      ...baseFilter,
+      sectoralGroups: { $exists: true, $not: { $size: 0 } }
+    });
+
+    // Get users without any sectoral group
+    const usersWithoutGroups = totalResidents - usersWithGroups;
+
+    // Get gender breakdown for sectoral groups (for deeper analysis)
+    const genderBySector = await User.aggregate([
+      { $match: baseFilter },
+      { $unwind: { path: "$sectoralGroups", preserveNullAndEmptyArrays: false } },
+      {
+        $group: {
+          _id: {
+            sector: "$sectoralGroups",
+            gender: "$gender"
+          },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Format gender breakdown
+    const genderBreakdown = {};
+    genderBySector.forEach(item => {
+      if (!genderBreakdown[item._id.sector]) {
+        genderBreakdown[item._id.sector] = { male: 0, female: 0, other: 0 };
+      }
+      const gender = (item._id.gender || 'other').toLowerCase();
+      if (gender === 'male') genderBreakdown[item._id.sector].male = item.count;
+      else if (gender === 'female') genderBreakdown[item._id.sector].female = item.count;
+      else genderBreakdown[item._id.sector].other = item.count;
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        summary: {
+          totalResidents,
+          usersWithGroups,
+          usersWithoutGroups,
+          participationRate: totalResidents > 0 ? ((usersWithGroups / totalResidents) * 100).toFixed(1) : '0.0'
+        },
+        sectoralGroups: formattedStats,
+        genderBreakdown,
+        // For chart visualization
+        chartData: formattedStats.map(s => ({
+          name: s.label.split(' ')[0], // Short name for chart
+          value: s.count,
+          fullLabel: s.label
+        }))
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching sectoral groups stats:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching sectoral groups statistics",
+      error: error.message
+    });
+  }
+};

@@ -1,5 +1,6 @@
 const User = require("../models/User");
 const ProfileUpdate = require("../models/ProfileUpdate");
+const Settings = require("../models/Settings");
 const { sendProfileUpdateNotification, sendProfileUpdateApprovalEmail, sendProfileUpdateRejectionEmail } = require("../utils/emailService");
 
 /**
@@ -49,12 +50,13 @@ const findChangedFields = (oldData, newData, parentPath = '') => {
         });
       }
     } else if (Array.isArray(newObj)) {
-      // Handle arrays
-      if (JSON.stringify(oldObj) !== JSON.stringify(newObj)) {
+      // Handle arrays - ensure oldObj is also an array for comparison
+      const oldArray = Array.isArray(oldObj) ? oldObj : [];
+      if (JSON.stringify(oldArray) !== JSON.stringify(newObj)) {
         changes.push({
           fieldName: path.split('.').pop(),
           fieldPath: path,
-          oldValue: oldObj,
+          oldValue: oldArray,
           newValue: newObj,
         });
       }
@@ -108,6 +110,15 @@ exports.getMyProfile = async (req, res) => {
  */
 exports.submitProfileUpdate = async (req, res) => {
   try {
+    // Check if profile updates are enabled in system settings
+    const settings = await Settings.getSettings();
+    if (settings.system.profileUpdateEnabled === false) {
+      return res.status(403).json({
+        success: false,
+        message: "Profile updates are currently disabled. Please try again later.",
+      });
+    }
+
     let { updateType, updateData, updateReason } = req.body;
     
     // Handle form data - build updateData from form fields
@@ -121,13 +132,33 @@ exports.submitProfileUpdate = async (req, res) => {
         }
       }
       
+      // Handle sectoralGroups JSON string
+      if (updateType === 'sectoral_groups') {
+        if (updateData.sectoralGroups) {
+          try {
+            updateData.sectoralGroups = JSON.parse(updateData.sectoralGroups);
+          } catch (e) {
+            // Already an array or invalid JSON
+            if (typeof updateData.sectoralGroups === 'string') {
+              updateData.sectoralGroups = [updateData.sectoralGroups];
+            }
+          }
+        } else {
+          // If no sectoralGroups in updateData, set to empty array (clearing all groups)
+          updateData.sectoralGroups = [];
+        }
+      }
+      
       // Wrap in appropriate container based on update type
       if (updateType === 'birth_certificate' && !updateData.birthCertificate) {
         updateData = { birthCertificate: updateData };
       }
     }
     
-    if (!updateType || !updateData) {
+    // For sectoral_groups, empty array is valid (clearing groups)
+    const isEmptyButValid = updateType === 'sectoral_groups' && Array.isArray(updateData.sectoralGroups);
+    
+    if (!updateType || (!updateData && !isEmptyButValid) || (Object.keys(updateData).length === 0 && !isEmptyButValid)) {
       return res.status(400).json({
         success: false,
         message: "Update type and data are required",
@@ -214,6 +245,12 @@ exports.submitProfileUpdate = async (req, res) => {
           tinNumber: user.tinNumber,
           sssGsisNumber: user.sssGsisNumber,
           precinctNumber: user.precinctNumber,
+        };
+        break;
+      
+      case 'sectoral_groups':
+        oldData = {
+          sectoralGroups: user.sectoralGroups || [],
         };
         break;
         

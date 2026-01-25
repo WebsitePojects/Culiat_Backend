@@ -129,7 +129,8 @@ const verifyDocument = async (req, res) => {
         verificationGeneratedAt: document.verificationGeneratedAt,
         documentGeneratedAt: document.documentGeneratedAt,
         status: document.status,
-        validUntil: document.validUntil || null,
+        expirationDate: document.expirationDate || null,
+        isExpired: document.isExpired || false,
         // Location info (partial for privacy)
         barangay: document.address?.barangay || 'Culiat',
         city: document.address?.city || 'Quezon City',

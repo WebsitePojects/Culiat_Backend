@@ -3,6 +3,19 @@ const dotenv = require("dotenv");
 const cors = require("cors");
 const connectDB = require("./config/db");
 
+// Security Middleware
+const {
+  rateLimiters,
+  inputSanitizer,
+  noSqlInjectionPrevention,
+  securityHeaders,
+  auditLogger,
+  createCorsConfig,
+} = require("./middleware/securityMiddleware");
+
+// Maintenance Mode Middleware
+const maintenanceMode = require("./middleware/maintenanceMiddleware");
+
 // Load environment variables
 dotenv.config();
 
@@ -13,10 +26,35 @@ const app = express();
 
 const path = require("path");
 
-// Middleware
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Security Middleware - Apply before routes
+// 1. Security headers (XSS protection, clickjacking prevention, etc.)
+app.use(securityHeaders);
+
+// 2. CORS configuration
+const corsConfig = createCorsConfig([
+  process.env.FRONTEND_URL,
+  process.env.ADMIN_URL,
+].filter(Boolean));
+app.use(cors(corsConfig));
+
+// 3. General rate limiting
+app.use(rateLimiters.general);
+
+// 4. Audit logging for security events
+app.use(auditLogger);
+
+// Body parsers
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// 5. Input sanitization (after body parsing)
+app.use(inputSanitizer);
+
+// 6. NoSQL injection prevention
+app.use(noSqlInjectionPrevention);
+
+// 7. Maintenance mode check (after body parsing, before routes)
+app.use(maintenanceMode);
 
 // serve uploaded files statically
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
@@ -40,6 +78,7 @@ app.use("/api/settings", require("./routes/settingsRoute"));
 app.use("/api/achievements", require("./routes/achievementsRoute"));
 app.use("/api/payments", require("./routes/paymentRoute"));
 app.use("/api/sectoral", require("./routes/sectoralRoute"));
+app.use("/api/hashtags", require("./routes/hashtagRoute"));
 
 // New model routes
 app.use("/api/officials", require("./routes/officialsRoute"));

@@ -131,11 +131,34 @@ const formatSlashDate = (date) => {
 };
 
 /**
- * Get expiration date (1 year from issue date)
+ * Calculate expiration date based on Philippine standards
  */
-const getExpirationDate = (issueDate) => {
-  const d = new Date(issueDate || new Date());
-  d.setFullYear(d.getFullYear() + 1);
+const calculateExpirationDate = (documentType, issueDate = new Date()) => {
+  const d = new Date(issueDate);
+  
+  switch (documentType) {
+    case "barangay_id":
+    case "business_permit":
+    case "business_clearance":
+    case "liquor_permit":
+    case "building_permit":
+      // Valid for 1 year
+      d.setFullYear(d.getFullYear() + 1);
+      break;
+      
+    case "ctc":
+      // Valid until Dec 31st of the current year
+      d.setMonth(11); // December (0-indexed)
+      d.setDate(31);
+      d.setHours(23, 59, 59, 999);
+      break;
+      
+    default:
+      // Clearance, Residency, Good Moral, Indigency, Missionary, Rehab: 6 Months
+      d.setMonth(d.getMonth() + 6);
+      break;
+  }
+  
   return d;
 };
 
@@ -569,7 +592,7 @@ exports.generateDocumentFile = async (req, res) => {
       // Short date formats for Barangay ID
       birth_date_short: formatShortDate(documentRequest.dateOfBirth),
       issue_date_short: formatSlashDate(new Date()),
-      expiration_date: formatSlashDate(getExpirationDate(new Date())),
+      expiration_date: formatSlashDate(documentRequest.expirationDate || calculateExpirationDate(documentRequest.documentType)),
 
       // Residency type
       residency_type: (documentRequest.residencyType || "").toUpperCase(),
@@ -603,7 +626,7 @@ exports.generateDocumentFile = async (req, res) => {
 
       // Short date formats for residency certificate
       issued_on: formatSlashDate(new Date()),
-      valid_until: formatSlashDate(getExpirationDate(new Date())),
+      valid_until: formatSlashDate(documentRequest.expirationDate || calculateExpirationDate(documentRequest.documentType)),
       issued_on_text: formatOfficialDate(new Date()).replace(
         /(\d+)(st|nd|rd|th) day of /,
         ""
@@ -785,6 +808,9 @@ exports.generateDocumentFile = async (req, res) => {
           documentRequest.verificationGeneratedAt = new Date();
           documentRequest.documentGeneratedAt = new Date();
           documentRequest.qrCodeUrl = getVerificationUrl(verificationToken);
+          
+          // Set expiration date based on standards
+          documentRequest.expirationDate = calculateExpirationDate(documentRequest.documentType);
           
           await documentRequest.save();
           console.log(`🔐 Token saved: ${verificationToken.slice(0, 20)}...`);

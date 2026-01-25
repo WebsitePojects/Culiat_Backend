@@ -89,12 +89,33 @@ exports.getAchievement = async (req, res) => {
 // @access  Private (Admin)
 exports.createAchievement = async (req, res) => {
   try {
-    const { title, category, description, date } = req.body;
+    const { title, category, description, date, hashtags } = req.body;
     
     let image = 'no-photo.jpg';
+    let images = [];
+    
+    // Handle single image upload (legacy support)
     if (req.file) {
-      // Use Cloudinary URL (file.path) or local filename
       image = getImageFromFile(req.file);
+    }
+    
+    // Handle multiple images upload
+    if (req.files && req.files.length > 0) {
+      images = req.files.map(file => getImageFromFile(file));
+      // Set first image as the main image if not already set
+      if (image === 'no-photo.jpg' && images.length > 0) {
+        image = images[0];
+      }
+    }
+
+    // Parse hashtags if it's a JSON string
+    let parsedHashtags = [];
+    if (hashtags) {
+      try {
+        parsedHashtags = typeof hashtags === 'string' ? JSON.parse(hashtags) : hashtags;
+      } catch (e) {
+        parsedHashtags = typeof hashtags === 'string' ? hashtags.split(',').map(h => h.trim()).filter(Boolean) : [];
+      }
     }
 
     const achievement = await Achievement.create({
@@ -102,7 +123,9 @@ exports.createAchievement = async (req, res) => {
       category,
       description,
       date,
-      image
+      image,
+      images,
+      hashtags: parsedHashtags
     });
 
     res.status(201).json({
@@ -139,11 +162,66 @@ exports.updateAchievement = async (req, res) => {
       date: req.body.date
     };
 
+    // Handle hashtags
+    if (req.body.hashtags !== undefined) {
+      let parsedHashtags = [];
+      if (req.body.hashtags) {
+        try {
+          parsedHashtags = typeof req.body.hashtags === 'string' ? JSON.parse(req.body.hashtags) : req.body.hashtags;
+        } catch (e) {
+          parsedHashtags = typeof req.body.hashtags === 'string' ? req.body.hashtags.split(',').map(h => h.trim()).filter(Boolean) : [];
+        }
+      }
+      fieldsToUpdate.hashtags = parsedHashtags;
+    }
+
+    // Handle single image upload (legacy support)
     if (req.file) {
-      // Delete old image if it's not the default one
+      // Delete old main image if it's not the default one
       await deleteOldImage(achievement.image);
-      // Use Cloudinary URL (file.path) or local filename
       fieldsToUpdate.image = getImageFromFile(req.file);
+    }
+    
+    // Handle multiple images upload
+    if (req.files && req.files.length > 0) {
+      // Delete old images
+      if (achievement.images && achievement.images.length > 0) {
+        for (const img of achievement.images) {
+          await deleteOldImage(img);
+        }
+      }
+      
+      fieldsToUpdate.images = req.files.map(file => getImageFromFile(file));
+      
+      // Set first image as main image if not already set
+      if (!fieldsToUpdate.image && fieldsToUpdate.images.length > 0) {
+        fieldsToUpdate.image = fieldsToUpdate.images[0];
+      }
+    }
+    
+    // Handle existing images passed from frontend (JSON string)
+    if (req.body.existingImages) {
+      try {
+        const existingImages = JSON.parse(req.body.existingImages);
+        
+        // Delete removed images
+        if (achievement.images && achievement.images.length > 0) {
+          for (const img of achievement.images) {
+            if (!existingImages.includes(img)) {
+              await deleteOldImage(img);
+            }
+          }
+        }
+        
+        // If new files uploaded, combine with existing
+        if (fieldsToUpdate.images) {
+          fieldsToUpdate.images = [...existingImages, ...fieldsToUpdate.images];
+        } else {
+          fieldsToUpdate.images = existingImages;
+        }
+      } catch (e) {
+        console.error('Error parsing existingImages:', e);
+      }
     }
 
     achievement = await Achievement.findByIdAndUpdate(req.params.id, fieldsToUpdate, {
@@ -178,8 +256,15 @@ exports.deleteAchievement = async (req, res) => {
       });
     }
 
-    // Delete image if it's not the default one
+    // Delete main image if it's not the default one
     await deleteOldImage(achievement.image);
+    
+    // Delete all additional images
+    if (achievement.images && achievement.images.length > 0) {
+      for (const img of achievement.images) {
+        await deleteOldImage(img);
+      }
+    }
 
     await achievement.deleteOne();
 

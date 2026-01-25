@@ -305,6 +305,9 @@ const documentRequestSchema = new mongoose.Schema(
       trim: true,
     },
 
+    // Expiration details
+    expirationDate: { type: Date },
+
     createdAt: { type: Date, default: Date.now },
   },
   {
@@ -699,6 +702,12 @@ documentRequestSchema.virtual("emergencyContactFullAddress").get(function () {
   if (addr.country) parts.push(addr.country);
 
   return parts.join(", ");
+});
+
+// Virtual for expiration status
+documentRequestSchema.virtual("isExpired").get(function () {
+  if (!this.expirationDate) return false;
+  return new Date() > this.expirationDate;
 });
 
 // Ensure virtuals are included in JSON

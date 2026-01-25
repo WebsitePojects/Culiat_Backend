@@ -10,6 +10,7 @@ const {
   getSummary,
   getDashboardStats,
   getUserDemographics,
+  getSectoralGroupsStats,
 } = require("../controllers/analyticsController");
 const { protect, authorize } = require("../middleware/auth");
 
@@ -29,5 +30,6 @@ router.get("/summary", getSummary);
 // Dashboard comprehensive stats
 router.get("/dashboard", getDashboardStats);
 router.get("/demographics", getUserDemographics);
+router.get("/sectoral-groups", getSectoralGroupsStats);
 
 module.exports = router;

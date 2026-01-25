@@ -174,6 +174,12 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
+    // Sectoral Groups - allows residents to identify with specific demographics
+    // Matches SectoralGroup model enum values
+    sectoralGroups: [{
+      type: String,
+      enum: ['senior', 'woman', 'child-youth', 'solo_parent', 'pwd'],
+    }],
     // Birth Certificate Fields - MATCHES PSABirthCertificateForm.jsx and Register.jsx exactly
     birthCertificate: {
       // === CERTIFICATE DETAILS ===
