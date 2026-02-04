@@ -480,9 +480,37 @@ exports.login = async (req, res) => {
     // Check password
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
+      // Get rate limit info from headers set by middleware
+      const rateLimitRemaining = res.getHeader('X-RateLimit-Remaining');
+      const rateLimitLimit = res.getHeader('X-RateLimit-Limit');
+      
+      console.log('🔍 Rate Limit Headers:', { rateLimitLimit, rateLimitRemaining });
+      
+      let message = "Invalid credentials";
+      
+      // Add remaining attempts warning for admin logins (when limit is 3)
+      // Headers can be numbers or strings depending on how they're set
+      const limit = typeof rateLimitLimit === 'number' ? rateLimitLimit : parseInt(rateLimitLimit);
+      const remaining = typeof rateLimitRemaining === 'number' ? rateLimitRemaining : parseInt(rateLimitRemaining);
+      
+      if (limit === 3 && !isNaN(remaining)) {
+        console.log('⚠️ Admin login failed, remaining attempts:', remaining);
+        
+        if (remaining === 2) {
+          message = "Invalid credentials. You have 2 attempts remaining before your account is temporarily locked.";
+        } else if (remaining === 1) {
+          message = "Invalid credentials. WARNING: You have only 1 attempt remaining before your account is temporarily locked for 15 minutes.";
+        } else if (remaining === 0) {
+          message = "Invalid credentials. This was your last attempt. Your account will be temporarily locked.";
+        }
+      }
+      
+      console.log('📤 Sending response with message:', message);
+      
       return res.status(401).json({
         success: false,
-        message: "Invalid credentials",
+        message: message,
+        attemptsRemaining: remaining,
       });
     }
 

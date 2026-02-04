@@ -62,7 +62,8 @@ router.post(
   upload.single("proofOfResidency"),
   residentRegister
 );
-router.post("/login", rateLimiters.auth, login);  // Strict rate limiting for login
+router.post("/login", rateLimiters.auth, login);  // Rate limiting for resident login
+router.post("/admin-login", rateLimiters.adminAuth, login);  // Strict rate limiting (3 attempts) for admin login
 router.post("/forgotpassword", rateLimiters.passwordReset, forgotPassword);  // Rate limit password reset
 router.put("/resetpassword/:resetToken", rateLimiters.passwordReset, resetPassword);
 router.post("/adminRegister", adminRegister);

@@ -71,25 +71,33 @@ const createRateLimiter = (options = {}) => {
 
 // Pre-configured rate limiters
 const rateLimiters = {
-  // General API rate limiter
+  // General API rate limiter - increased for legitimate usage
   general: createRateLimiter({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 200, // 200 requests per 15 minutes
+    max: 1000, // 1000 requests per 15 minutes (allows ~1 req/sec)
     message: "Too many requests from this IP, please try again after 15 minutes",
   }),
   
-  // Strict rate limiter for authentication endpoints
+  // Rate limiter for regular user authentication
   auth: createRateLimiter({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 10, // Only 10 login attempts per 15 minutes
-    message: "Too many login attempts, please try again after 15 minutes",
+    max: 50, // 50 login attempts per 15 minutes for residents
+    message: "Too many login attempts detected. Please wait 15 minutes before trying again. If you've forgotten your password, use the 'Forgot Password' link to reset it.",
     keyGenerator: (req) => `auth_${req.ip}_${req.body?.email || req.body?.username || 'unknown'}`,
   }),
   
-  // Rate limiter for registration
+  // Strict rate limiter for admin authentication - prevents brute force
+  adminAuth: createRateLimiter({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 3, // Only 3 admin login attempts per 15 minutes
+    message: "Too many admin login attempts detected. For security purposes, admin logins are limited to 3 attempts per 15 minutes. Please wait before trying again. All attempts are being monitored and logged.",
+    keyGenerator: (req) => `admin_auth_${req.ip}_${req.body?.email || req.body?.username || 'unknown'}`,
+  }),
+  
+  // Rate limiter for registration - relaxed for legitimate users
   registration: createRateLimiter({
     windowMs: 60 * 60 * 1000, // 1 hour
-    max: 5, // 5 registration attempts per hour
+    max: 10, // 10 registration attempts per hour
     message: "Too many registration attempts, please try again later",
   }),
   
