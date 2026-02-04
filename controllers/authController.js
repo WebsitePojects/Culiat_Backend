@@ -48,9 +48,18 @@ exports.register = async (req, res) => {
       });
     }
 
-    // Debug: Log received files
+    // Debug: Log received files and body
     console.log('📁 Received files:', req.files ? Object.keys(req.files) : 'none');
     console.log('📝 Received body keys:', Object.keys(req.body));
+    console.log('📋 Body data:', JSON.stringify({
+      username: req.body.username,
+      email: req.body.email,
+      firstName: req.body.firstName,
+      lastName: req.body.lastName,
+      residentType: req.body.residentType,
+      address: req.body.address ? 'present' : 'missing',
+      emergencyContact: req.body.emergencyContact ? 'present' : 'missing',
+    }, null, 2));
     
     const {
       // Account credentials
@@ -63,6 +72,7 @@ exports.register = async (req, res) => {
       firstName,
       lastName,
       middleName,
+      suffix,
       salutation,
       dateOfBirth,
       placeOfBirth,
@@ -105,16 +115,20 @@ exports.register = async (req, res) => {
     }
 
     // Check if user already exists - handle optional email
-    const query = { username };
-    if (email) {
-      query.$or = [{ email }, { username }];
-      delete query.username;
+    // Normalize email: convert empty string to null
+    const normalizedEmail = email && email.trim() !== '' ? email.trim() : null;
+    
+    // Build query to check for existing user
+    let existsQuery = { username };
+    if (normalizedEmail) {
+      existsQuery = { $or: [{ email: normalizedEmail }, { username }] };
     }
-    const userExists = await User.findOne(email ? { $or: [{ email }, { username }] } : { username });
+    
+    const userExists = await User.findOne(existsQuery);
     if (userExists) {
       return res.status(400).json({
         success: false,
-        message: email && userExists.email === email 
+        message: normalizedEmail && userExists.email === normalizedEmail 
           ? "User already exists with this email" 
           : "User already exists with this username",
       });
@@ -296,9 +310,10 @@ exports.register = async (req, res) => {
     }
 
     // Create user with all fields
+    // Note: normalizedEmail was already defined above when checking for existing user
     const user = await User.create({
       username,
-      email: email || null, // Optional - for elderly without email
+      email: normalizedEmail, // Optional - for elderly without email
       password,
       firstName,
       lastName,
@@ -377,6 +392,30 @@ exports.register = async (req, res) => {
       user
     );
   } catch (error) {
+    console.error('❌ Registration Error:', error.message);
+    console.error('📋 Full Error Stack:', error.stack);
+    
+    // Check for specific Mongoose validation errors
+    if (error.name === 'ValidationError') {
+      const validationErrors = Object.values(error.errors).map(e => e.message);
+      console.error('🔍 Validation Errors:', validationErrors);
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validationErrors,
+      });
+    }
+    
+    // Check for duplicate key error
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern)[0];
+      console.error('🔑 Duplicate Key Error:', field);
+      return res.status(400).json({
+        success: false,
+        message: `A user with this ${field} already exists`,
+      });
+    }
+    
     res.status(500).json({
       success: false,
       message: "Error registering user",

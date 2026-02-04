@@ -71,10 +71,10 @@ const createRateLimiter = (options = {}) => {
 
 // Pre-configured rate limiters
 const rateLimiters = {
-  // General API rate limiter - increased for legitimate usage
+  // General API rate limiter - very permissive for normal usage
   general: createRateLimiter({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 1000, // 1000 requests per 15 minutes (allows ~1 req/sec)
+    max: 3000, // 3000 requests per 15 minutes (allows ~3 req/sec for normal browsing)
     message: "Too many requests from this IP, please try again after 15 minutes",
   }),
   
@@ -96,8 +96,8 @@ const rateLimiters = {
   
   // Rate limiter for registration - relaxed for legitimate users
   registration: createRateLimiter({
-    windowMs: 60 * 60 * 1000, // 1 hour
-    max: 10, // 10 registration attempts per hour
+    windowMs: 15 * 60 * 1000, // 15 minutes (reduced from 1 hour)
+    max: 50, // 50 registration attempts per 15 minutes (increased from 10/hour)
     message: "Too many registration attempts, please try again later",
   }),
   
