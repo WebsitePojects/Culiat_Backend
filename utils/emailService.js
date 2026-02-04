@@ -5,10 +5,11 @@ const Settings = require('../models/Settings');
 const isEmailEnabled = async () => {
   try {
     const settings = await Settings.getSettings();
-    return settings?.system?.emailNotificationsEnabled !== false; // Default to true if not set
+    const enabled = settings?.system?.emailNotificationsEnabled === true;
+    return enabled;
   } catch (error) {
     console.error('Error checking email settings:', error);
-    return true; // Default to enabled if error
+    return false; // Default to disabled if error to prevent unwanted emails
   }
 };
 
@@ -443,6 +444,115 @@ const sendProfileUpdateRejectionEmail = async (email, { firstName, updateType, r
   return sendEmail(email, 'Profile Update Rejected - Barangay Culiat', html);
 };
 
+// Send registration approved email
+const sendRegistrationApprovedEmail = async (email, firstName) => {
+  // Skip if no email provided (elderly users without email)
+  if (!email) {
+    console.log('No email provided, skipping registration approval email');
+    return { success: true, skipped: true, reason: 'No email address' };
+  }
+
+  const subject = 'Registration Approved - Welcome to Barangay Culiat';
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background-color: #10B981; padding: 20px; text-align: center;">
+        <h1 style="color: white; margin: 0;">✓ Registration Approved</h1>
+      </div>
+      <div style="padding: 30px; background-color: #f9fafb;">
+        <h2 style="color: #1f2937;">Welcome to Barangay Culiat, ${firstName}!</h2>
+        <p style="color: #4b5563; line-height: 1.6;">
+          Great news! Your registration has been reviewed and approved by the Barangay administration.
+        </p>
+        <div style="background-color: #d1fae5; border: 1px solid #10b981; border-radius: 8px; padding: 20px; margin: 20px 0;">
+          <p style="color: #065f46; margin: 0; font-weight: bold; text-align: center;">
+            ✓ Your account is now active!
+          </p>
+        </div>
+        <p style="color: #4b5563; line-height: 1.6;">
+          You can now log in to access all Barangay services available to you. Here's what you can do:
+        </p>
+        <ul style="color: #4b5563; line-height: 1.8;">
+          <li>Request barangay documents and certificates</li>
+          <li>Submit feedback and reports</li>
+          <li>View announcements and updates</li>
+          <li>Update your profile information</li>
+        </ul>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/login" 
+             style="background-color: #10B981; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+            Log In Now
+          </a>
+        </div>
+        <p style="color: #6b7280; font-size: 14px;">
+          Thank you for registering with Barangay Culiat!
+        </p>
+      </div>
+      <div style="background-color: #1f2937; padding: 20px; text-align: center;">
+        <p style="color: #9ca3af; font-size: 12px; margin: 0;">
+          Barangay Culiat Management System<br>
+          Quezon City, Metro Manila
+        </p>
+      </div>
+    </div>
+  `;
+
+  return sendEmail(email, subject, html);
+};
+
+// Send registration rejected email
+const sendRegistrationRejectedEmail = async (email, firstName, rejectionReason) => {
+  // Skip if no email provided (elderly users without email)
+  if (!email) {
+    console.log('No email provided, skipping registration rejection email');
+    return { success: true, skipped: true, reason: 'No email address' };
+  }
+
+  const subject = 'Registration Not Approved - Barangay Culiat';
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background-color: #EF4444; padding: 20px; text-align: center;">
+        <h1 style="color: white; margin: 0;">Registration Not Approved</h1>
+      </div>
+      <div style="padding: 30px; background-color: #f9fafb;">
+        <h2 style="color: #1f2937;">Hello ${firstName},</h2>
+        <p style="color: #4b5563; line-height: 1.6;">
+          We regret to inform you that your registration with Barangay Culiat could not be approved at this time.
+        </p>
+        <div style="background-color: #fee2e2; border: 1px solid #ef4444; border-radius: 8px; padding: 20px; margin: 20px 0;">
+          <p style="color: #991b1b; margin: 0 0 10px 0;"><strong>Reason:</strong></p>
+          <p style="color: #7f1d1d; margin: 0;">${rejectionReason || 'Your registration did not meet the verification requirements.'}</p>
+        </div>
+        <p style="color: #4b5563; line-height: 1.6;">
+          <strong>What you can do:</strong>
+        </p>
+        <ul style="color: #4b5563; line-height: 1.8;">
+          <li>Review the reason for rejection above</li>
+          <li>Ensure your submitted documents are valid and clearly readable</li>
+          <li>Submit a new registration with correct information</li>
+          <li>Visit the Barangay office for assistance</li>
+        </ul>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/register" 
+             style="background-color: #3B82F6; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+            Register Again
+          </a>
+        </div>
+        <p style="color: #6b7280; font-size: 14px;">
+          If you believe this is an error or need clarification, please visit the Barangay Culiat office during business hours.
+        </p>
+      </div>
+      <div style="background-color: #1f2937; padding: 20px; text-align: center;">
+        <p style="color: #9ca3af; font-size: 12px; margin: 0;">
+          Barangay Culiat Management System<br>
+          Quezon City, Metro Manila
+        </p>
+      </div>
+    </div>
+  `;
+
+  return sendEmail(email, subject, html);
+};
+
 module.exports = {
   sendVerificationCode,
   sendEmail,
@@ -451,4 +561,6 @@ module.exports = {
   sendProfileVerificationRejected,
   sendProfileUpdateApprovalEmail,
   sendProfileUpdateRejectionEmail,
+  sendRegistrationApprovedEmail,
+  sendRegistrationRejectedEmail,
 };

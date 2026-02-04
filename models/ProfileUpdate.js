@@ -17,7 +17,7 @@ const profileUpdateSchema = new mongoose.Schema(
     // Type of update
     updateType: {
       type: String,
-      enum: ['personal_info', 'birth_certificate', 'contact_info', 'account_info', 'address', 'emergency_contact', 'spouse_info', 'additional_info', 'full_profile'],
+      enum: ['personal_info', 'birth_certificate', 'contact_info', 'account_info', 'address', 'emergency_contact', 'spouse_info', 'additional_info', 'sectoral_groups', 'full_profile'],
       required: true,
     },
     

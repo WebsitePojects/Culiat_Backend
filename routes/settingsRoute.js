@@ -13,8 +13,8 @@ const {
 } = require("../controllers/settingsController");
 const { protect, authorize } = require("../middleware/auth");
 
-// Public route - get public settings
-router.get("/", getSettings);
+// Protected route - get full settings for authenticated users
+router.get("/", protect, getSettings);
 
 // Public route - get maintenance status
 router.get("/maintenance-status", getMaintenanceStatus);

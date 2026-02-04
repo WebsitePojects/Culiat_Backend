@@ -1,15 +1,11 @@
 const Settings = require("../models/Settings");
+const jwt = require("jsonwebtoken");
 
 /**
  * Middleware to check if the system is in maintenance mode
- * When enabled, only admin users can access the system
- * 
- * IMPORTANT: This middleware does NOT block API endpoints completely.
- * It allows:
- * - Admin/SuperAdmin users to bypass
- * - Authentication routes (login)
- * - Settings routes (so admins can turn off maintenance)
- * - Public endpoints
+ * Returns maintenance status without blocking APIs
+ * The frontend should check this status and display maintenance page
+ * Backend APIs remain functional for admins
  */
 const maintenanceMode = async (req, res, next) => {
   try {
@@ -20,35 +16,42 @@ const maintenanceMode = async (req, res, next) => {
       return next();
     }
     
+    // Check if user has a valid admin token
+    let isAdmin = false;
+    const token = req.headers.authorization?.split(' ')[1];
+    
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        // Admin role codes: 74933 (Admin) or 74932 (SuperAdmin)
+        if (decoded.role === 74933 || decoded.role === 74932) {
+          isAdmin = true;
+        }
+      } catch (err) {
+        // Invalid token, continue as non-admin
+      }
+    }
+    
     // Allow admin users to bypass maintenance mode
-    // Admins have roleCode 74933 or 74932 (SuperAdmin)
-    if (req.user && (req.user.role === 74933 || req.user.role === 74932 || req.user.roleCode === 74933 || req.user.roleCode === 74932)) {
+    if (isAdmin) {
       return next();
     }
     
     // Allow certain paths that should always be accessible
-    // These paths are critical for system management and authentication
     const allowedPaths = [
       '/api/auth/login',
       '/api/auth/refresh',
       '/api/auth/logout',
       '/api/settings/maintenance-status',
-      '/api/settings/public',
-      '/api/settings',  // Allow settings access (protected by auth anyway)
+      '/api/settings',  // For checking maintenance status
     ];
     
-    // Check if the current path starts with any allowed path
-    if (allowedPaths.some(path => req.path.startsWith(path) || req.path === path)) {
+    // Check if the current path is allowed
+    if (allowedPaths.some(path => req.path === path || req.path.startsWith(path))) {
       return next();
     }
     
-    // Also allow all settings routes for authenticated admins
-    // This ensures admins can always manage settings
-    if (req.path.startsWith('/api/settings')) {
-      return next();
-    }
-    
-    // Return maintenance mode response
+    // Return maintenance mode response (frontend should handle this)
     return res.status(503).json({
       success: false,
       message: settings.system.maintenanceMessage || "System is currently under maintenance. Please try again later.",

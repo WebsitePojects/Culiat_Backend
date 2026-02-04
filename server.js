@@ -85,6 +85,7 @@ app.use("/api/officials", require("./routes/officialsRoute"));
 app.use("/api/barangay-info", require("./routes/barangayInfoRoute"));
 app.use("/api/services", require("./routes/servicesRoute"));
 app.use("/api/faqs", require("./routes/faqsRoute"));
+app.use("/api/banners", require("./routes/bannerRoute"));
 
 // Document generation routes
 app.use("/api/documents", require("./routes/documentRoutes"));
@@ -98,6 +99,9 @@ app.use("/api/profile-verification", require("./routes/profileVerificationRoute"
 
 // Profile update routes (for residents to update their profile)
 app.use("/api/profile-update", require("./routes/profileUpdateRoute"));
+
+// Cookie consent and IP logging routes
+app.use("/api", require("./routes/cookieConsent"));
 
 // PUBLIC: Document QR Code verification routes (no auth required)
 app.use("/api/verify", require("./routes/verificationRoute"));

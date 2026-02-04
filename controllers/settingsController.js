@@ -34,22 +34,25 @@ exports.getMaintenanceStatus = async (req, res) => {
 exports.getSettings = async (req, res) => {
   try {
     const settings = await Settings.getSettings();
+    
+    // Convert to plain object to ensure all fields are included
+    const settingsObj = settings.toObject();
 
     // If not authenticated, return only public settings
     if (!req.user) {
       return res.status(200).json({
         success: true,
         data: {
-          siteInfo: settings.siteInfo,
-          contactInfo: settings.contactInfo,
-          socialMedia: settings.socialMedia,
-          footer: settings.footer,
-          theme: settings.theme,
+          siteInfo: settingsObj.siteInfo,
+          contactInfo: settingsObj.contactInfo,
+          socialMedia: settingsObj.socialMedia,
+          footer: settingsObj.footer,
+          theme: settingsObj.theme,
           banner: {
-            enabled: settings.banner.enabled,
-            images: settings.banner.images,
-            autoRotate: settings.banner.autoRotate,
-            rotationInterval: settings.banner.rotationInterval,
+            enabled: settingsObj.banner?.enabled,
+            images: settingsObj.banner?.images,
+            autoRotate: settingsObj.banner?.autoRotate,
+            rotationInterval: settingsObj.banner?.rotationInterval,
           },
         },
       });
@@ -58,7 +61,7 @@ exports.getSettings = async (req, res) => {
     // Return full settings for authenticated users
     res.status(200).json({
       success: true,
-      data: settings,
+      data: settingsObj,
     });
   } catch (error) {
     console.error("Error fetching settings:", error);

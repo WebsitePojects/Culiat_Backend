@@ -4,6 +4,19 @@ const { getRoleName } = require('../utils/roleHelpers');
 const { logAction } = require('../utils/logHelper');
 const { deleteFromCloudinary, getPublicIdFromUrl } = require('../config/cloudinary');
 
+// Helper function to extract YouTube video ID from URL
+const extractYouTubeVideoId = (url) => {
+  if (!url) return null;
+  try {
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+    const match = url.match(regExp);
+    return (match && match[2].length === 11) ? match[2] : null;
+  } catch (error) {
+    console.error('Error extracting YouTube video ID:', error);
+    return null;
+  }
+};
+
 // Check if using Cloudinary
 const isCloudinaryEnabled = () => {
   return process.env.CLOUDINARY_CLOUD_NAME && 
@@ -23,7 +36,7 @@ const getImageUrl = (file) => {
 // @access  Private (Admin)
 exports.createAnnouncement = async (req, res) => {
   try {
-    const { title, content, category, priority, publishDate, expiryDate, location, eventDate, status, hashtags } = req.body;
+    const { title, content, category, priority, publishDate, expiryDate, location, eventDate, status, hashtags, youtubeVideoUrl } = req.body;
     
     // Handle multiple image uploads (up to 6)
     const images = [];
@@ -51,6 +64,9 @@ exports.createAnnouncement = async (req, res) => {
       }
     }
 
+    // Extract YouTube video ID if URL is provided
+    const youtubeVideoId = youtubeVideoUrl ? extractYouTubeVideoId(youtubeVideoUrl) : null;
+
     const announcement = await Announcement.create({
       title,
       content,
@@ -65,6 +81,8 @@ exports.createAnnouncement = async (req, res) => {
       images: images.length > 0 ? images : (singleImageUrl ? [singleImageUrl] : []),
       image: images.length > 0 ? images[0] : singleImageUrl, // Keep first image for backward compatibility
       hashtags: parsedHashtags,
+      youtubeVideoUrl: youtubeVideoUrl || null,
+      youtubeVideoId: youtubeVideoId,
       publishedBy: req.user._id,
     });
 
@@ -226,7 +244,7 @@ exports.getAnnouncement = async (req, res) => {
 // @access  Private (Admin)
 exports.updateAnnouncement = async (req, res) => {
   try {
-    const { title, content, category, priority, isPublished, publishDate, expiryDate, location, eventDate, status, removeImages, hashtags } = req.body;
+    const { title, content, category, priority, isPublished, publishDate, expiryDate, location, eventDate, status, removeImages, hashtags, youtubeVideoUrl } = req.body;
 
     let announcement = await Announcement.findById(req.params.id);
 
@@ -286,6 +304,9 @@ exports.updateAnnouncement = async (req, res) => {
       }
     }
 
+    // Extract YouTube video ID if URL is provided
+    const youtubeVideoId = youtubeVideoUrl ? extractYouTubeVideoId(youtubeVideoUrl) : null;
+
     // Build update object
     const updateData = {
       title: title || announcement.title,
@@ -299,6 +320,12 @@ exports.updateAnnouncement = async (req, res) => {
       images: images,
       image: images.length > 0 ? images[0] : null, // Keep first image for backward compatibility
     };
+
+    // Handle YouTube video URL
+    if (youtubeVideoUrl !== undefined) {
+      updateData.youtubeVideoUrl = youtubeVideoUrl || null;
+      updateData.youtubeVideoId = youtubeVideoId;
+    }
 
     // Handle hashtags
     if (hashtags !== undefined) {

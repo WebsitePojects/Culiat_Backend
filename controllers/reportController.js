@@ -262,7 +262,7 @@ exports.updateReportStatus = async (req, res) => {
     });
     
     await logAction(
-      LOGCONSTANTS.actions.reports.UPDATE_STATUS,
+      LOGCONSTANTS.actions.reports.UPDATE_REPORT_STATUS,
       `Report status updated: ${report._id} to ${status}`,
       req.user
     );

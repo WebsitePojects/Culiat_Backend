@@ -11,7 +11,7 @@ const sectoralGroupSchema = new mongoose.Schema(
     },
     sectorType: {
       type: String,
-      enum: ["senior", "woman", "child-youth", "solo_parent", "pwd"],
+      enum: ["senior", "woman", "child-youth", "solo_parent", "pwd", "lgbtqia"],
       required: true,
       index: true,
     },

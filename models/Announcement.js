@@ -90,6 +90,26 @@ const announcementSchema = new mongoose.Schema({
     type: String,
     trim: true,
   }],
+  // YouTube video URL for embedding videos
+  youtubeVideoUrl: {
+    type: String,
+    default: null,
+    trim: true,
+    validate: {
+      validator: function(v) {
+        if (!v) return true; // Allow null/empty
+        // More lenient check to allow iframe embed codes as requested by user
+        return v.includes('youtube.com') || v.includes('youtu.be') || /<iframe.*src=".*youtube\.com\/embed\/.*">/.test(v);
+      },
+      message: 'Invalid YouTube URL or embed code.'
+    }
+  },
+  // Extracted YouTube video ID for easy embed generation
+  youtubeVideoId: {
+    type: String,
+    default: null,
+    trim: true,
+  },
   createdAt: {
     type: Date,
     default: Date.now,

@@ -29,6 +29,20 @@ const setNestedValue = (obj, path, value) => {
 const findChangedFields = (oldData, newData, parentPath = '') => {
   const changes = [];
   
+  // Helper to normalize dates to YYYY-MM-DD format
+  const normalizeDateToYYYYMMDD = (dateValue) => {
+    if (!dateValue) return null;
+    
+    const date = new Date(dateValue);
+    if (isNaN(date.getTime())) return dateValue; // Not a valid date, return as is
+    
+    // Format as YYYY-MM-DD (local timezone, not UTC)
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  
   const compare = (oldObj, newObj, path) => {
     if (newObj === null || newObj === undefined) return;
     
@@ -37,9 +51,15 @@ const findChangedFields = (oldData, newData, parentPath = '') => {
       const oldVal = oldObj;
       const newVal = newObj;
       
-      // Convert dates to ISO strings for comparison
-      const oldCompare = oldVal instanceof Date ? oldVal.toISOString() : oldVal;
-      const newCompare = newVal instanceof Date ? newVal.toISOString() : newVal;
+      // Special handling for dates - normalize both to YYYY-MM-DD
+      let oldCompare, newCompare;
+      if (oldVal instanceof Date || newVal instanceof Date || path.includes('dateOfBirth') || path.includes('Date')) {
+        oldCompare = normalizeDateToYYYYMMDD(oldVal);
+        newCompare = normalizeDateToYYYYMMDD(newVal);
+      } else {
+        oldCompare = oldVal;
+        newCompare = newVal;
+      }
       
       if (oldCompare !== newCompare) {
         changes.push({
@@ -134,10 +154,18 @@ exports.submitProfileUpdate = async (req, res) => {
       
       // Handle sectoralGroups JSON string
       if (updateType === 'sectoral_groups') {
+        console.log('📥 Processing sectoral_groups update:', {
+          rawSectoralGroups: updateData.sectoralGroups,
+          type: typeof updateData.sectoralGroups,
+          bodyKeys: Object.keys(req.body)
+        });
+        
         if (updateData.sectoralGroups) {
           try {
             updateData.sectoralGroups = JSON.parse(updateData.sectoralGroups);
+            console.log('✅ Parsed sectoralGroups:', updateData.sectoralGroups);
           } catch (e) {
+            console.log('⚠️ Failed to parse, checking if already array');
             // Already an array or invalid JSON
             if (typeof updateData.sectoralGroups === 'string') {
               updateData.sectoralGroups = [updateData.sectoralGroups];
@@ -145,8 +173,11 @@ exports.submitProfileUpdate = async (req, res) => {
           }
         } else {
           // If no sectoralGroups in updateData, set to empty array (clearing all groups)
+          console.log('ℹ️ No sectoralGroups in updateData, setting to empty array');
           updateData.sectoralGroups = [];
         }
+        
+        console.log('📦 Final updateData for sectoral_groups:', updateData);
       }
       
       // Wrap in appropriate container based on update type
@@ -348,6 +379,13 @@ exports.submitProfileUpdate = async (req, res) => {
       verificationConfig, // Store verification requirements for admin reference
     });
     
+    console.log('✅ Profile update created successfully:', {
+      id: profileUpdate._id,
+      updateType: profileUpdate.updateType,
+      changedFieldsCount: changedFields.length,
+      status: profileUpdate.status
+    });
+    
     // Send notification email to admins (optional)
     try {
       // You can implement admin notification here
@@ -367,11 +405,19 @@ exports.submitProfileUpdate = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error submitting profile update:", error);
+    console.error("❌ ERROR submitting profile update:", error);
+    console.error("Error stack:", error.stack);
+    console.error("Error name:", error.name);
+    console.error("Error details:", {
+      message: error.message,
+      updateType: req.body.updateType,
+      userId: req.user?._id,
+    });
     res.status(500).json({
       success: false,
       message: "Error submitting profile update",
       error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
     });
   }
 };

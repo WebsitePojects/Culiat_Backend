@@ -6,6 +6,8 @@ const Settings = require("../models/Settings");
 const { LOGCONSTANTS } = require("../config/logConstants");
 const { getRoleName } = require("../utils/roleHelpers");
 const { logAction } = require("../utils/logHelper");
+const { getDocumentTypeLabel, isGovernmentID, isEndorsementLetter, validateDocumentCombination } = require("../config/documentTypes");
+const { sendRegistrationApprovedEmail, sendRegistrationRejectedEmail } = require("../utils/emailService");
 
 // Check if using Cloudinary
 const isCloudinaryEnabled = () => {
@@ -55,6 +57,8 @@ exports.register = async (req, res) => {
       username,
       email,
       password,
+      // Resident type
+      residentType,
       // Personal information
       firstName,
       lastName,
@@ -76,25 +80,43 @@ exports.register = async (req, res) => {
       occupation,
       // Sectoral Groups (array)
       sectoralGroups,
-      // Address (nested object)
+      // Address (nested object) - for residents
       address,
+      // Non-resident address (for non-residents)
+      nonResidentAddress,
       // Spouse info (nested object)
       spouseInfo,
       // Emergency contact (nested object)
       emergencyContact,
       // Birth Certificate fields
       birthCertificate,
-      // Primary ID types
+      // Primary ID types (document types)
       primaryID1Type,
       primaryID2Type,
     } = req.body;
 
-    // Check if user already exists
-    const userExists = await User.findOne({ $or: [{ email }, { username }] });
+    // Validate document combination - at least one must be a valid government ID
+    const docValidation = validateDocumentCombination(primaryID1Type, primaryID2Type);
+    if (!docValidation.valid) {
+      return res.status(400).json({
+        success: false,
+        message: docValidation.message,
+      });
+    }
+
+    // Check if user already exists - handle optional email
+    const query = { username };
+    if (email) {
+      query.$or = [{ email }, { username }];
+      delete query.username;
+    }
+    const userExists = await User.findOne(email ? { $or: [{ email }, { username }] } : { username });
     if (userExists) {
       return res.status(400).json({
         success: false,
-        message: "User already exists with this email or username",
+        message: email && userExists.email === email 
+          ? "User already exists with this email" 
+          : "User already exists with this username",
       });
     }
 
@@ -276,7 +298,7 @@ exports.register = async (req, res) => {
     // Create user with all fields
     const user = await User.create({
       username,
-      email,
+      email: email || null, // Optional - for elderly without email
       password,
       firstName,
       lastName,
@@ -296,7 +318,12 @@ exports.register = async (req, res) => {
       colorOfHairEyes,
       occupation,
       sectoralGroups: sectoralGroups ? (Array.isArray(sectoralGroups) ? sectoralGroups : JSON.parse(sectoralGroups)) : [],
-      address,
+      // Resident type
+      residentType: residentType || "resident",
+      // Address for residents
+      address: residentType === "non_resident" ? undefined : address,
+      // Non-resident address
+      nonResidentAddress: residentType === "non_resident" ? (nonResidentAddress ? (typeof nonResidentAddress === 'string' ? JSON.parse(nonResidentAddress) : nonResidentAddress) : null) : null,
       spouseInfo,
       emergencyContact,
       birthCertificate: birthCertificateData,
@@ -821,6 +848,19 @@ exports.approveRegistration = async (req, res) => {
     user.approvedAt = Date.now();
     await user.save();
 
+    // Send approval email (mandatory) - gracefully handle no email
+    try {
+      if (user.email) {
+        await sendRegistrationApprovedEmail(user.email, user.firstName);
+        console.log(`📧 Registration approval email sent to ${user.email}`);
+      } else {
+        console.log(`📧 No email for user ${user._id}, skipping approval email`);
+      }
+    } catch (emailError) {
+      console.error('Failed to send approval email:', emailError);
+      // Don't fail the request if email fails
+    }
+
     res.status(200).json({
       success: true,
       message: "Registration approved successfully",
@@ -835,7 +875,7 @@ exports.approveRegistration = async (req, res) => {
     // Create audit log
     await logAction(
       LOGCONSTANTS.actions.user.UPDATE_USER,
-      `Approved resident registration: ${user._id} (${user.email})`,
+      `Approved resident registration: ${user._id} (${user.email || user.username})`,
       req.user
     );
   } catch (error) {
@@ -869,10 +909,31 @@ exports.rejectRegistration = async (req, res) => {
       });
     }
 
+    // Rejection reason is mandatory
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Rejection reason is required",
+      });
+    }
+
     user.registrationStatus = "rejected";
-    user.rejectionReason = reason || "Registration rejected by admin";
+    user.rejectionReason = reason;
     user.isActive = false;
     await user.save();
+
+    // Send rejection email (mandatory) - gracefully handle no email
+    try {
+      if (user.email) {
+        await sendRegistrationRejectedEmail(user.email, user.firstName, reason);
+        console.log(`📧 Registration rejection email sent to ${user.email}`);
+      } else {
+        console.log(`📧 No email for user ${user._id}, skipping rejection email`);
+      }
+    } catch (emailError) {
+      console.error('Failed to send rejection email:', emailError);
+      // Don't fail the request if email fails
+    }
 
     res.status(200).json({
       success: true,
@@ -889,7 +950,7 @@ exports.rejectRegistration = async (req, res) => {
     // Create audit log
     await logAction(
       LOGCONSTANTS.actions.user.UPDATE_USER,
-      `Rejected resident registration: ${user._id} (${user.email}) - Reason: ${reason}`,
+      `Rejected resident registration: ${user._id} (${user.email || user.username}) - Reason: ${reason}`,
       req.user
     );
   } catch (error) {

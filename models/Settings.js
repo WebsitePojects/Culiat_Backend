@@ -215,6 +215,25 @@ const settingsSchema = new mongoose.Schema(
         type: Boolean,
         default: false,
       },
+      // Registration Email Settings - mandatory for approval/rejection
+      registrationApprovalEmailEnabled: {
+        type: Boolean,
+        default: true, // Always on by default - mandatory
+      },
+      registrationRejectionEmailEnabled: {
+        type: Boolean,
+        default: true, // Always on by default - mandatory
+      },
+      // Service restrictions for non-residents
+      residentOnlyServices: {
+        type: [String],
+        default: [
+          "residency",
+          "clearance",
+          "indigency",
+          "ctc",
+        ],
+      },
     },
 
     // Terms and Conditions

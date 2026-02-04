@@ -19,7 +19,8 @@ const createCloudinaryStorage = (folder) => {
       const fieldname = file.fieldname || 'file';
       return {
         folder: `culiat-barangay/${folder}`,
-        format: ['jpg', 'jpeg', 'png'],
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'mp4', 'webm'],
+        resource_type: 'auto', // Automatically detect if it's image or video
         transformation: [{ quality: 'auto' }],
         public_id: `${fieldname}-${uniqueSuffix}`
       };

@@ -26,10 +26,12 @@ const userSchema = new mongoose.Schema(
     },
     email: {
       type: String,
-      required: [true, "Email is required"],
+      required: false, // Optional for elderly users without email
       unique: true,
+      sparse: true, // Allow multiple null values for unique index
       lowercase: true,
       trim: true,
+      default: null,
     },
     password: {
       type: String,
@@ -42,9 +44,15 @@ const userSchema = new mongoose.Schema(
       default: 74934, // Default to Resident
       enum: [74932, 74933, 74934], // Valid role codes (SuperAdmin, Admin, Resident)
     },
+    // Resident Type - determines if user is a Barangay Culiat resident or non-resident
+    residentType: {
+      type: String,
+      enum: ["resident", "non_resident"],
+      default: "resident",
+    },
     resetPasswordToken: String,
     resetPasswordExpire: Date,
-    // Atomic Address Structure
+    // Atomic Address Structure (for Barangay Culiat residents)
     address: {
       // Fixed Barangay Culiat Location
       country: {
@@ -98,6 +106,54 @@ const userSchema = new mongoose.Schema(
         type: String,
         trim: true,
         default: null,
+      },
+    },
+    // Non-Resident Address (for users outside Barangay Culiat)
+    nonResidentAddress: {
+      houseNumber: {
+        type: String,
+        trim: true,
+        default: null,
+      },
+      street: {
+        type: String,
+        trim: true,
+        default: null,
+      },
+      subdivision: {
+        type: String,
+        trim: true,
+        default: null,
+      },
+      barangay: {
+        type: String,
+        trim: true,
+        default: null,
+      },
+      city: {
+        type: String,
+        trim: true,
+        default: null,
+      },
+      province: {
+        type: String,
+        trim: true,
+        default: null,
+      },
+      region: {
+        type: String,
+        trim: true,
+        default: null,
+      },
+      postalCode: {
+        type: String,
+        trim: true,
+        default: null,
+      },
+      country: {
+        type: String,
+        trim: true,
+        default: "Philippines",
       },
     },
     phoneNumber: {
@@ -178,7 +234,7 @@ const userSchema = new mongoose.Schema(
     // Matches SectoralGroup model enum values
     sectoralGroups: [{
       type: String,
-      enum: ['senior', 'woman', 'child-youth', 'solo_parent', 'pwd'],
+      enum: ['senior', 'woman', 'child-youth', 'solo_parent', 'pwd', 'lgbtqia'],
     }],
     // Birth Certificate Fields - MATCHES PSABirthCertificateForm.jsx and Register.jsx exactly
     birthCertificate: {

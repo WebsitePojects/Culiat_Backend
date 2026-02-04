@@ -38,8 +38,7 @@ const HashtagSchema = new mongoose.Schema({
   },
 });
 
-// Index for faster lookups
-HashtagSchema.index({ name: 1 });
+// Index for faster lookups (name already has unique index from schema)
 HashtagSchema.index({ category: 1 });
 HashtagSchema.index({ isActive: 1, usageCount: -1 });
 

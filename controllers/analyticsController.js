@@ -989,11 +989,12 @@ exports.getSectoralGroupsStats = async (req, res) => {
       'woman': 'Women',
       'youth': 'Youth (15-30)',
       'solo_parent': 'Solo Parents',
-      'pwd': 'Persons with Disabilities (PWD)'
+      'pwd': 'Persons with Disabilities (PWD)',
+      'lgbtqia': 'LGBTQIA+'
     };
 
     // Map to include all groups with proper formatting
-    const allSectoralGroups = ['senior', 'woman', 'youth', 'solo_parent', 'pwd'];
+    const allSectoralGroups = ['senior', 'woman', 'youth', 'solo_parent', 'pwd', 'lgbtqia'];
     const formattedStats = allSectoralGroups.map(group => {
       const stat = sectoralStats.find(s => s._id === group);
       return {
