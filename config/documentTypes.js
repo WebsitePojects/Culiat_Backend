@@ -18,6 +18,8 @@ const GOVERNMENT_ID_TYPES = {
   philsys: "Philippine National ID (PhilSys)",
   nbi_clearance: "NBI Clearance",
   postal_id: "Postal ID",
+  barangay_id: "Barangay ID",
+  birth_certificate: "Birth Certificate",
 };
 
 // Non-ID Document Types (for verification)
@@ -61,29 +63,42 @@ const isEndorsementLetter = (type) => {
 };
 
 /**
- * Validate that at least one document is a valid government ID
+ * Validate document requirements based on resident type
  * @param {string} doc1Type - First document type
  * @param {string} doc2Type - Second document type
+ * @param {string} residentType - 'resident' or 'non_resident'
  * @returns {object} - { valid: boolean, message: string }
  */
-const validateDocumentCombination = (doc1Type, doc2Type) => {
-  const hasAtLeastOneID = isGovernmentID(doc1Type) || isGovernmentID(doc2Type);
-  
-  if (!hasAtLeastOneID) {
-    return {
-      valid: false,
-      message: "At least one document must be a valid government-issued ID",
-    };
+const validateDocumentCombination = (doc1Type, doc2Type, residentType) => {
+  if (residentType === "resident") {
+    // Residents only need 1 valid government ID
+    if (!doc1Type) {
+      return { valid: false, message: "Please select your document type" };
+    }
+    if (!isGovernmentID(doc1Type)) {
+      return { valid: false, message: "Residents must provide a valid government-issued ID" };
+    }
+    return { valid: true, message: "" };
+  } else {
+    // Non-residents need 1 government ID AND 1 endorsement letter
+    if (!doc1Type || !doc2Type) {
+      return { valid: false, message: "Non-residents must provide both a valid ID and an endorsement letter" };
+    }
+
+    const hasID = isGovernmentID(doc1Type) || isGovernmentID(doc2Type);
+    const hasEndorsement = isEndorsementLetter(doc1Type) || isEndorsementLetter(doc2Type);
+
+    if (!hasID) {
+      return { valid: false, message: "At least one document must be a valid government-issued ID" };
+    }
+    if (!hasEndorsement) {
+      return { valid: false, message: "Non-residents must also provide an endorsement letter" };
+    }
+    if (doc1Type === doc2Type) {
+      return { valid: false, message: "Please select two different types of documents" };
+    }
+    return { valid: true, message: "" };
   }
-  
-  if (doc1Type === doc2Type) {
-    return {
-      valid: false,
-      message: "Please select two different types of documents",
-    };
-  }
-  
-  return { valid: true, message: "" };
 };
 
 module.exports = {

@@ -86,6 +86,7 @@ app.use("/api/barangay-info", require("./routes/barangayInfoRoute"));
 app.use("/api/services", require("./routes/servicesRoute"));
 app.use("/api/faqs", require("./routes/faqsRoute"));
 app.use("/api/banners", require("./routes/bannerRoute"));
+app.use("/api/committees", require("./routes/committeeRoutes"));
 
 // Document generation routes
 app.use("/api/documents", require("./routes/documentRoutes"));
@@ -93,6 +94,7 @@ app.use("/api/documents", require("./routes/documentRoutes"));
 // Contact messages/feedback routes
 app.use("/api/contact-messages", require("./routes/contactMessagesRoute"));
 app.use("/api/feedback", require("./routes/contactMessagesRoute")); // Alias for frontend
+app.use("/api/committee-messages", require("./routes/committeeMessageRoutes"));
 
 // Profile verification routes (PSA birth certificate verification)
 app.use("/api/profile-verification", require("./routes/profileVerificationRoute"));

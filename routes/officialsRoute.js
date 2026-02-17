@@ -11,6 +11,7 @@ const {
   reorderOfficials,
   deleteOfficial,
   getOfficialsStats,
+  getPersonnel,
 } = require('../controllers/officialController');
 const { protect, authorize } = require('../middleware/auth');
 const { upload } = require('../middleware/fileUpload');
@@ -20,6 +21,7 @@ const ROLES = require('../config/roles');
 router.get('/', getAllOfficials);
 router.get('/active', getActiveOfficials);
 router.get('/position/:position', getOfficialsByPosition);
+router.get('/personnel', getPersonnel);
 router.get('/:id', getOfficial);
 
 // Admin routes - with file upload support

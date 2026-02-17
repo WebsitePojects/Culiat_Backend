@@ -107,6 +107,11 @@ const userSchema = new mongoose.Schema(
         trim: true,
         default: null,
       },
+      compound: {
+        type: String,
+        trim: true,
+        default: null,
+      },
     },
     // Non-Resident Address (for users outside Barangay Culiat)
     nonResidentAddress: {
@@ -234,8 +239,13 @@ const userSchema = new mongoose.Schema(
     // Matches SectoralGroup model enum values
     sectoralGroups: [{
       type: String,
-      enum: ['senior', 'woman', 'child-youth', 'solo_parent', 'pwd', 'lgbtqia'],
+      enum: ['senior', 'woman', 'youth', 'solo_parent', 'pwd', 'lgbtqia', 'toda', 'vendor', '4ps'],
     }],
+    womensOrganization: {
+      type: String,
+      trim: true,
+      default: null,
+    },
     // Birth Certificate Fields - MATCHES PSABirthCertificateForm.jsx and Register.jsx exactly
     birthCertificate: {
       // === CERTIFICATE DETAILS ===

@@ -90,6 +90,12 @@ const announcementSchema = new mongoose.Schema({
     type: String,
     trim: true,
   }],
+  // Link announcement to a committee (for accomplishments)
+  committeeRef: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Committee',
+    default: null,
+  },
   // YouTube video URL for embedding videos
   youtubeVideoUrl: {
     type: String,

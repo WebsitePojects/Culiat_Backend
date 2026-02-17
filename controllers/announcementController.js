@@ -36,7 +36,7 @@ const getImageUrl = (file) => {
 // @access  Private (Admin)
 exports.createAnnouncement = async (req, res) => {
   try {
-    const { title, content, category, priority, publishDate, expiryDate, location, eventDate, status, hashtags, youtubeVideoUrl } = req.body;
+    const { title, content, category, priority, publishDate, expiryDate, location, eventDate, status, hashtags, youtubeVideoUrl, committeeRef } = req.body;
     
     // Handle multiple image uploads (up to 6)
     const images = [];
@@ -83,6 +83,7 @@ exports.createAnnouncement = async (req, res) => {
       hashtags: parsedHashtags,
       youtubeVideoUrl: youtubeVideoUrl || null,
       youtubeVideoId: youtubeVideoId,
+      committeeRef: committeeRef || null,
       publishedBy: req.user._id,
     });
 
@@ -244,7 +245,7 @@ exports.getAnnouncement = async (req, res) => {
 // @access  Private (Admin)
 exports.updateAnnouncement = async (req, res) => {
   try {
-    const { title, content, category, priority, isPublished, publishDate, expiryDate, location, eventDate, status, removeImages, hashtags, youtubeVideoUrl } = req.body;
+    const { title, content, category, priority, isPublished, publishDate, expiryDate, location, eventDate, status, removeImages, hashtags, youtubeVideoUrl, committeeRef } = req.body;
 
     let announcement = await Announcement.findById(req.params.id);
 
@@ -325,6 +326,11 @@ exports.updateAnnouncement = async (req, res) => {
     if (youtubeVideoUrl !== undefined) {
       updateData.youtubeVideoUrl = youtubeVideoUrl || null;
       updateData.youtubeVideoId = youtubeVideoId;
+    }
+
+    // Handle committee reference
+    if (committeeRef !== undefined) {
+      updateData.committeeRef = committeeRef || null;
     }
 
     // Handle hashtags

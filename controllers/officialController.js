@@ -1,7 +1,53 @@
 const Official = require('../models/Official');
+const Committee = require('../models/Committee');
 const { LOGCONSTANTS } = require('../config/logConstants');
 const { logAction } = require('../utils/logHelper');
 const { deleteFromCloudinary, getPublicIdFromUrl } = require('../config/cloudinary');
+
+// Helper: Sync an official into a committee based on their role
+const syncOfficialToCommittee = async (officialId, committeeId, role) => {
+  try {
+    const update = {};
+    if (role === 'chairperson') {
+      update.chairperson = officialId;
+    } else if (role === 'co_chairperson') {
+      update.coChairperson = officialId;
+    }
+    // Always add to members array if not already there
+    if (role === 'member' || role === 'coordinator') {
+      await Committee.findByIdAndUpdate(committeeId, {
+        $addToSet: { members: officialId },
+        ...update,
+      });
+    } else if (Object.keys(update).length > 0) {
+      await Committee.findByIdAndUpdate(committeeId, {
+        $addToSet: { members: officialId },
+        ...update,
+      });
+    } else {
+      await Committee.findByIdAndUpdate(committeeId, {
+        $addToSet: { members: officialId },
+      });
+    }
+  } catch (error) {
+    console.error('Error syncing official to committee:', error);
+  }
+};
+
+// Helper: Remove an official from a committee
+const removeOfficialFromCommittee = async (officialId, committeeId, role) => {
+  try {
+    const update = { $pull: { members: officialId } };
+    if (role === 'chairperson') {
+      update.$unset = { chairperson: '' };
+    } else if (role === 'co_chairperson') {
+      update.$unset = { coChairperson: '' };
+    }
+    await Committee.findByIdAndUpdate(committeeId, update);
+  } catch (error) {
+    console.error('Error removing official from committee:', error);
+  }
+};
 
 // @desc    Get all officials
 // @route   GET /api/officials
@@ -46,6 +92,29 @@ exports.getActiveOfficials = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error fetching active officials',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
+    });
+  }
+};
+
+// @desc    Get all active officials for the personnel page (public)
+// @route   GET /api/officials/personnel
+// @access  Public
+exports.getPersonnel = async (req, res) => {
+  try {
+    const officials = await Official.find({ isActive: true })
+      .populate('committeeRef', 'name nameEnglish slug')
+      .sort({ branch: 1, displayOrder: 1, lastName: 1 });
+    
+    res.status(200).json({
+      success: true,
+      count: officials.length,
+      data: officials,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching personnel',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
     });
   }
@@ -130,6 +199,11 @@ exports.createOfficial = async (req, res) => {
       displayOrder,
       termStart,
       termEnd,
+      committeeRef,
+      committeeRole,
+      branch,
+      officeHours,
+      education,
     } = req.body;
 
     // Validate required fields
@@ -164,7 +238,17 @@ exports.createOfficial = async (req, res) => {
       displayOrder: displayOrderValue,
       termStart,
       termEnd,
+      committeeRef: committeeRef || undefined,
+      committeeRole: committeeRole || '',
+      branch: branch || 'Legislative',
+      officeHours,
+      education,
     });
+
+    // Auto-update committee if committeeRef and role assigned
+    if (committeeRef && committeeRole) {
+      await syncOfficialToCommittee(official._id, committeeRef, committeeRole);
+    }
 
     res.status(201).json({
       success: true,
@@ -213,6 +297,11 @@ exports.updateOfficial = async (req, res) => {
       displayOrder,
       termStart,
       termEnd,
+      committeeRef,
+      committeeRole,
+      branch,
+      officeHours,
+      education,
     } = req.body;
 
     const updateData = {};
@@ -239,6 +328,11 @@ exports.updateOfficial = async (req, res) => {
     
     if (termStart !== undefined) updateData.termStart = termStart;
     if (termEnd !== undefined) updateData.termEnd = termEnd;
+    if (committeeRef !== undefined) updateData.committeeRef = committeeRef || undefined;
+    if (committeeRole !== undefined) updateData.committeeRole = committeeRole || '';
+    if (branch !== undefined) updateData.branch = branch;
+    if (officeHours !== undefined) updateData.officeHours = officeHours;
+    if (education !== undefined) updateData.education = education;
 
     // Handle photo upload - if new file uploaded, delete old one from Cloudinary
     if (req.file) {
@@ -256,10 +350,26 @@ exports.updateOfficial = async (req, res) => {
       updateData.photo = req.body.photo;
     }
 
+    // Track old committee to clean up if changed
+    const oldCommitteeRef = official.committeeRef?.toString();
+    const oldCommitteeRole = official.committeeRole;
+
     official = await Official.findByIdAndUpdate(req.params.id, updateData, {
       new: true,
       runValidators: true,
     });
+
+    // Auto-update committee membership if committeeRef or role changed
+    const newCommitteeRef = (committeeRef !== undefined ? committeeRef : oldCommitteeRef) || null;
+    const newCommitteeRole = (committeeRole !== undefined ? committeeRole : oldCommitteeRole) || '';
+
+    if (oldCommitteeRef && oldCommitteeRef !== newCommitteeRef) {
+      // Remove from old committee
+      await removeOfficialFromCommittee(official._id, oldCommitteeRef, oldCommitteeRole);
+    }
+    if (newCommitteeRef && newCommitteeRole) {
+      await syncOfficialToCommittee(official._id, newCommitteeRef, newCommitteeRole);
+    }
 
     res.status(200).json({
       success: true,

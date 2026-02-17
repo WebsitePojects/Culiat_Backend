@@ -90,6 +90,7 @@ exports.register = async (req, res) => {
       occupation,
       // Sectoral Groups (array)
       sectoralGroups,
+      womensOrganization,
       // Address (nested object) - for residents
       address,
       // Non-resident address (for non-residents)
@@ -105,8 +106,8 @@ exports.register = async (req, res) => {
       primaryID2Type,
     } = req.body;
 
-    // Validate document combination - at least one must be a valid government ID
-    const docValidation = validateDocumentCombination(primaryID1Type, primaryID2Type);
+    // Validate document combination based on resident type
+    const docValidation = validateDocumentCombination(primaryID1Type, primaryID2Type, residentType);
     if (!docValidation.valid) {
       return res.status(400).json({
         success: false,
@@ -333,14 +334,15 @@ exports.register = async (req, res) => {
       colorOfHairEyes,
       occupation,
       sectoralGroups: sectoralGroups ? (Array.isArray(sectoralGroups) ? sectoralGroups : JSON.parse(sectoralGroups)) : [],
+      womensOrganization: womensOrganization || null,
       // Resident type
       residentType: residentType || "resident",
-      // Address for residents
-      address: residentType === "non_resident" ? undefined : address,
+      // Address for residents - parse if stringified JSON
+      address: residentType === "non_resident" ? undefined : (address ? (typeof address === 'string' ? JSON.parse(address) : address) : undefined),
       // Non-resident address
       nonResidentAddress: residentType === "non_resident" ? (nonResidentAddress ? (typeof nonResidentAddress === 'string' ? JSON.parse(nonResidentAddress) : nonResidentAddress) : null) : null,
-      spouseInfo,
-      emergencyContact,
+      spouseInfo: spouseInfo ? (typeof spouseInfo === 'string' ? JSON.parse(spouseInfo) : spouseInfo) : null,
+      emergencyContact: emergencyContact ? (typeof emergencyContact === 'string' ? JSON.parse(emergencyContact) : emergencyContact) : null,
       birthCertificate: birthCertificateData,
       validID: validIDData,
       backOfValidID: backOfValidIDData,

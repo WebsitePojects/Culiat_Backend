@@ -58,6 +58,28 @@ const officialSchema = new mongoose.Schema({
     type: String,
     trim: true,
   },
+  branch: {
+    type: String,
+    enum: ['Executive', 'Legislative', 'Administrative', 'Lupong Tagapamayapa', 'SK Council', 'Other'],
+    default: 'Legislative',
+  },
+  committeeRef: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Committee',
+  },
+  committeeRole: {
+    type: String,
+    enum: ['chairperson', 'co_chairperson', 'coordinator', 'member', ''],
+    default: '',
+  },
+  officeHours: {
+    type: String,
+    trim: true,
+  },
+  education: {
+    type: String,
+    trim: true,
+  },
   displayOrder: {
     type: Number,
     default: 0,
