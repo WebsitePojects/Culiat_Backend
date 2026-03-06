@@ -1,52 +1,297 @@
+const mongoose = require('mongoose');
 const Official = require('../models/Official');
 const Committee = require('../models/Committee');
 const { LOGCONSTANTS } = require('../config/logConstants');
 const { logAction } = require('../utils/logHelper');
 const { deleteFromCloudinary, getPublicIdFromUrl } = require('../config/cloudinary');
 
-// Helper: Sync an official into a committee based on their role
-const syncOfficialToCommittee = async (officialId, committeeId, role) => {
-  try {
-    const update = {};
+const BRANCH_OPTIONS = [
+  'Executive',
+  'Legislative',
+  'Administrative',
+  'Lupong Tagapamayapa',
+  'SK Council',
+  'Barangay Public Safety Officers (BPSO)',
+  'Other',
+];
+
+const BRANCH_ALIASES = {
+  'sangguniang kabataan': 'SK Council',
+  'sk': 'SK Council',
+  'judiciary': 'Lupong Tagapamayapa',
+  'bpso': 'Barangay Public Safety Officers (BPSO)',
+  'barangay public safety officers': 'Barangay Public Safety Officers (BPSO)',
+};
+
+const normalizeBranchName = (branch) => {
+  if (!branch || typeof branch !== 'string') return '';
+  const raw = branch.trim();
+  if (BRANCH_OPTIONS.includes(raw)) return raw;
+
+  const lowered = raw.toLowerCase();
+  if (BRANCH_ALIASES[lowered]) return BRANCH_ALIASES[lowered];
+
+  const matched = BRANCH_OPTIONS.find((option) => option.toLowerCase() === lowered);
+  return matched || '';
+};
+
+const parseBoolean = (value, fallback = false) => {
+  if (value === undefined || value === null || value === '') return fallback;
+  if (typeof value === 'boolean') return value;
+  return String(value).toLowerCase() === 'true';
+};
+
+const parseNumber = (value, fallback = 0) => {
+  if (value === undefined || value === null || value === '') return fallback;
+  const parsed = Number(value);
+  return Number.isNaN(parsed) ? fallback : parsed;
+};
+
+const parseJsonIfString = (value, fallback) => {
+  if (value === undefined || value === null || value === '') return fallback;
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return fallback;
+    }
+  }
+  return value;
+};
+
+const uniqueArray = (arr) => [...new Set(arr)];
+
+const normalizeBranches = ({ branchesInput, branchInput, existingBranches = [] }) => {
+  let normalized = [];
+
+  const parsedBranches = parseJsonIfString(branchesInput, branchesInput);
+
+  if (Array.isArray(parsedBranches) && parsedBranches.length > 0) {
+    normalized = parsedBranches;
+  } else if (
+    parsedBranches &&
+    typeof parsedBranches === 'object' &&
+    !Array.isArray(parsedBranches)
+  ) {
+    normalized = Object.values(parsedBranches);
+  } else if (typeof parsedBranches === 'string' && parsedBranches.includes(',')) {
+    normalized = parsedBranches.split(',').map((item) => item.trim());
+  } else if (typeof parsedBranches === 'string' && parsedBranches.trim()) {
+    normalized = [parsedBranches.trim()];
+  }
+
+  if (branchInput && typeof branchInput === 'string') {
+    normalized.push(branchInput.trim());
+  }
+
+  if (normalized.length === 0 && Array.isArray(existingBranches) && existingBranches.length > 0) {
+    normalized = [...existingBranches];
+  }
+
+  normalized = uniqueArray(
+    normalized
+      .map((branch) => normalizeBranchName(branch))
+      .filter(Boolean)
+  );
+
+  if (normalized.length === 0) normalized = ['Legislative'];
+
+  return {
+    branch: normalized[0],
+    branches: normalized,
+  };
+};
+
+const normalizeCommitteeAssignments = ({
+  committeeAssignmentsInput,
+  committeeRefInput,
+  committeeRoleInput,
+  existingAssignments = [],
+}) => {
+  const parsedAssignments = parseJsonIfString(committeeAssignmentsInput, committeeAssignmentsInput);
+  let assignments = [];
+
+  if (Array.isArray(parsedAssignments)) {
+    assignments = parsedAssignments;
+  }
+
+  if (
+    assignments.length === 0 &&
+    committeeRefInput &&
+    mongoose.Types.ObjectId.isValid(String(committeeRefInput))
+  ) {
+    assignments = [
+      {
+        committeeRef: String(committeeRefInput),
+        committeeRole: committeeRoleInput || '',
+      },
+    ];
+  }
+
+  if (assignments.length === 0 && Array.isArray(existingAssignments)) {
+    assignments = existingAssignments;
+  }
+
+  const normalized = [];
+  const seen = new Set();
+
+  assignments.forEach((assignment) => {
+    const rawCommitteeId = assignment?.committeeRef?._id || assignment?.committeeRef;
+    const committeeId = rawCommitteeId ? String(rawCommitteeId) : '';
+    if (!committeeId || !mongoose.Types.ObjectId.isValid(committeeId)) return;
+
+    const role = assignment?.committeeRole || '';
+    const key = `${committeeId}:${role}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+
+    normalized.push({
+      committeeRef: committeeId,
+      committeeRole: role,
+    });
+  });
+
+  return normalized;
+};
+
+const clearOfficialFromAllCommittees = async (officialId) => {
+  await Committee.updateMany({ members: officialId }, { $pull: { members: officialId } });
+  await Committee.updateMany({ chairperson: officialId }, { $unset: { chairperson: '' } });
+  await Committee.updateMany({ coChairperson: officialId }, { $unset: { coChairperson: '' } });
+};
+
+const syncOfficialCommitteeAssignments = async (officialId, assignments) => {
+  await clearOfficialFromAllCommittees(officialId);
+
+  for (const assignment of assignments) {
+    const committeeId = assignment.committeeRef;
+    const role = assignment.committeeRole || '';
+
+    const updateData = {
+      $addToSet: { members: officialId },
+    };
+
     if (role === 'chairperson') {
-      update.chairperson = officialId;
+      updateData.chairperson = officialId;
     } else if (role === 'co_chairperson') {
-      update.coChairperson = officialId;
+      updateData.coChairperson = officialId;
     }
-    // Always add to members array if not already there
-    if (role === 'member' || role === 'coordinator') {
-      await Committee.findByIdAndUpdate(committeeId, {
-        $addToSet: { members: officialId },
-        ...update,
-      });
-    } else if (Object.keys(update).length > 0) {
-      await Committee.findByIdAndUpdate(committeeId, {
-        $addToSet: { members: officialId },
-        ...update,
-      });
-    } else {
-      await Committee.findByIdAndUpdate(committeeId, {
-        $addToSet: { members: officialId },
-      });
-    }
-  } catch (error) {
-    console.error('Error syncing official to committee:', error);
+
+    await Committee.findByIdAndUpdate(committeeId, updateData);
   }
 };
 
-// Helper: Remove an official from a committee
-const removeOfficialFromCommittee = async (officialId, committeeId, role) => {
-  try {
-    const update = { $pull: { members: officialId } };
-    if (role === 'chairperson') {
-      update.$unset = { chairperson: '' };
-    } else if (role === 'co_chairperson') {
-      update.$unset = { coChairperson: '' };
-    }
-    await Committee.findByIdAndUpdate(committeeId, update);
-  } catch (error) {
-    console.error('Error removing official from committee:', error);
+const hydrateCommitteeSummary = async (assignments) => {
+  if (!assignments.length) {
+    return {
+      committee: '',
+      committeeRef: undefined,
+      committeeRole: '',
+    };
   }
+
+  const uniqueCommitteeIds = uniqueArray(assignments.map((item) => String(item.committeeRef)));
+  const committees = await Committee.find({ _id: { $in: uniqueCommitteeIds } }).select('_id name');
+  const nameMap = new Map(committees.map((committee) => [String(committee._id), committee.name]));
+
+  const names = assignments
+    .map((item) => nameMap.get(String(item.committeeRef)))
+    .filter(Boolean);
+
+  return {
+    committee: uniqueArray(names).join(', '),
+    committeeRef: assignments[0]?.committeeRef || undefined,
+    committeeRole: assignments[0]?.committeeRole || '',
+  };
+};
+
+const getExistingAssignments = (official) => {
+  if (Array.isArray(official.committeeAssignments) && official.committeeAssignments.length > 0) {
+    return official.committeeAssignments;
+  }
+  if (official.committeeRef) {
+    return [
+      {
+        committeeRef: official.committeeRef,
+        committeeRole: official.committeeRole || '',
+      },
+    ];
+  }
+  return [];
+};
+
+const buildOfficialPayload = async ({ reqBody, existingOfficial = null, photoUrl = null }) => {
+  const {
+    firstName,
+    lastName,
+    middleName,
+    position,
+    committee,
+    isActive,
+    contactNumber,
+    email,
+    bio,
+    displayOrder,
+    termStart,
+    termEnd,
+    committeeRef,
+    committeeRole,
+    committeeAssignments,
+    branch,
+    branches,
+    officeHours,
+    education,
+  } = reqBody;
+
+  const existingBranches = existingOfficial?.branches?.length
+    ? existingOfficial.branches
+    : existingOfficial?.branch
+      ? [existingOfficial.branch]
+      : [];
+
+  const normalizedBranches = normalizeBranches({
+    branchesInput: branches,
+    branchInput: branch,
+    existingBranches,
+  });
+
+  const normalizedAssignments = normalizeCommitteeAssignments({
+    committeeAssignmentsInput: committeeAssignments,
+    committeeRefInput: committeeRef,
+    committeeRoleInput: committeeRole,
+    existingAssignments: existingOfficial ? getExistingAssignments(existingOfficial) : [],
+  });
+
+  const committeeSummary = await hydrateCommitteeSummary(normalizedAssignments);
+
+  return {
+    firstName,
+    lastName,
+    middleName,
+    position,
+    committee: committee !== undefined ? committee : committeeSummary.committee,
+    isActive: parseBoolean(
+      isActive,
+      existingOfficial ? existingOfficial.isActive : true
+    ),
+    contactNumber,
+    email,
+    photo: photoUrl,
+    bio,
+    displayOrder: parseNumber(
+      displayOrder,
+      existingOfficial ? existingOfficial.displayOrder : 0
+    ),
+    termStart,
+    termEnd,
+    branch: normalizedBranches.branch,
+    branches: normalizedBranches.branches,
+    committeeRef: committeeSummary.committeeRef,
+    committeeRole: committeeSummary.committeeRole,
+    committeeAssignments: normalizedAssignments,
+    officeHours,
+    education,
+  };
 };
 
 // @desc    Get all officials
@@ -60,7 +305,10 @@ exports.getAllOfficials = async (req, res) => {
     if (isActive !== undefined) filter.isActive = isActive === 'true';
     if (position) filter.position = position;
 
-    const officials = await Official.find(filter).sort({ displayOrder: 1, createdAt: -1 });
+    const officials = await Official.find(filter)
+      .populate('committeeRef', 'name slug')
+      .populate('committeeAssignments.committeeRef', 'name slug')
+      .sort({ displayOrder: 1, createdAt: -1 });
 
     res.status(200).json({
       success: true,
@@ -81,7 +329,10 @@ exports.getAllOfficials = async (req, res) => {
 // @access  Public
 exports.getActiveOfficials = async (req, res) => {
   try {
-    const officials = await Official.find({ isActive: true }).sort({ displayOrder: 1 });
+    const officials = await Official.find({ isActive: true })
+      .populate('committeeRef', 'name slug')
+      .populate('committeeAssignments.committeeRef', 'name slug')
+      .sort({ displayOrder: 1 });
 
     res.status(200).json({
       success: true,
@@ -104,8 +355,9 @@ exports.getPersonnel = async (req, res) => {
   try {
     const officials = await Official.find({ isActive: true })
       .populate('committeeRef', 'name nameEnglish slug')
-      .sort({ branch: 1, displayOrder: 1, lastName: 1 });
-    
+      .populate('committeeAssignments.committeeRef', 'name nameEnglish slug')
+      .sort({ displayOrder: 1, lastName: 1 });
+
     res.status(200).json({
       success: true,
       count: officials.length,
@@ -130,7 +382,10 @@ exports.getOfficialsByPosition = async (req, res) => {
     const officials = await Official.find({
       position,
       isActive: true,
-    }).sort({ displayOrder: 1 });
+    })
+      .populate('committeeRef', 'name slug')
+      .populate('committeeAssignments.committeeRef', 'name slug')
+      .sort({ displayOrder: 1 });
 
     res.status(200).json({
       success: true,
@@ -151,7 +406,9 @@ exports.getOfficialsByPosition = async (req, res) => {
 // @access  Public
 exports.getOfficial = async (req, res) => {
   try {
-    const official = await Official.findById(req.params.id);
+    const official = await Official.findById(req.params.id)
+      .populate('committeeRef', 'name slug')
+      .populate('committeeAssignments.committeeRef', 'name slug');
 
     if (!official) {
       return res.status(404).json({
@@ -165,7 +422,6 @@ exports.getOfficial = async (req, res) => {
       data: official,
     });
   } catch (error) {
-    // Handle invalid MongoDB ObjectId
     if (error.kind === 'ObjectId') {
       return res.status(404).json({
         success: false,
@@ -186,27 +442,8 @@ exports.getOfficial = async (req, res) => {
 // @access  Private (Admin)
 exports.createOfficial = async (req, res) => {
   try {
-    const {
-      firstName,
-      lastName,
-      middleName,
-      position,
-      committee,
-      isActive,
-      contactNumber,
-      email,
-      bio,
-      displayOrder,
-      termStart,
-      termEnd,
-      committeeRef,
-      committeeRole,
-      branch,
-      officeHours,
-      education,
-    } = req.body;
+    const { firstName, lastName, position } = req.body;
 
-    // Validate required fields
     if (!firstName || !lastName || !position) {
       return res.status(400).json({
         success: false,
@@ -214,41 +451,19 @@ exports.createOfficial = async (req, res) => {
       });
     }
 
-    // Get photo URL from uploaded file (if using Cloudinary) or use provided URL
     let photoUrl = req.body.photo || null;
     if (req.file) {
       photoUrl = req.file.path || req.file.secure_url || req.file.url;
     }
 
-    // Convert string boolean to actual boolean (from FormData)
-    const isActiveValue = isActive === 'true' || isActive === true;
-    const displayOrderValue = typeof displayOrder === 'string' ? parseInt(displayOrder, 10) : displayOrder || 0;
-
-    const official = await Official.create({
-      firstName,
-      lastName,
-      middleName,
-      position,
-      committee,
-      isActive: isActiveValue,
-      contactNumber,
-      email,
-      photo: photoUrl,
-      bio,
-      displayOrder: displayOrderValue,
-      termStart,
-      termEnd,
-      committeeRef: committeeRef || undefined,
-      committeeRole: committeeRole || '',
-      branch: branch || 'Legislative',
-      officeHours,
-      education,
+    const payload = await buildOfficialPayload({
+      reqBody: req.body,
+      photoUrl,
     });
 
-    // Auto-update committee if committeeRef and role assigned
-    if (committeeRef && committeeRole) {
-      await syncOfficialToCommittee(official._id, committeeRef, committeeRole);
-    }
+    const official = await Official.create(payload);
+
+    await syncOfficialCommitteeAssignments(official._id, payload.committeeAssignments || []);
 
     res.status(201).json({
       success: true,
@@ -284,92 +499,41 @@ exports.updateOfficial = async (req, res) => {
       });
     }
 
-    const {
-      firstName,
-      lastName,
-      middleName,
-      position,
-      committee,
-      isActive,
-      contactNumber,
-      email,
-      bio,
-      displayOrder,
-      termStart,
-      termEnd,
-      committeeRef,
-      committeeRole,
-      branch,
-      officeHours,
-      education,
-    } = req.body;
-
-    const updateData = {};
-
-    if (firstName !== undefined) updateData.firstName = firstName;
-    if (lastName !== undefined) updateData.lastName = lastName;
-    if (middleName !== undefined) updateData.middleName = middleName;
-    if (position !== undefined) updateData.position = position;
-    if (committee !== undefined) updateData.committee = committee;
-    
-    // Convert string boolean to actual boolean (from FormData)
-    if (isActive !== undefined) {
-      updateData.isActive = isActive === 'true' || isActive === true;
-    }
-    
-    if (contactNumber !== undefined) updateData.contactNumber = contactNumber;
-    if (email !== undefined) updateData.email = email;
-    if (bio !== undefined) updateData.bio = bio;
-    
-    // Convert displayOrder to number if it's a string
-    if (displayOrder !== undefined) {
-      updateData.displayOrder = typeof displayOrder === 'string' ? parseInt(displayOrder, 10) : displayOrder;
-    }
-    
-    if (termStart !== undefined) updateData.termStart = termStart;
-    if (termEnd !== undefined) updateData.termEnd = termEnd;
-    if (committeeRef !== undefined) updateData.committeeRef = committeeRef || undefined;
-    if (committeeRole !== undefined) updateData.committeeRole = committeeRole || '';
-    if (branch !== undefined) updateData.branch = branch;
-    if (officeHours !== undefined) updateData.officeHours = officeHours;
-    if (education !== undefined) updateData.education = education;
-
-    // Handle photo upload - if new file uploaded, delete old one from Cloudinary
+    let photoUrl = official.photo;
     if (req.file) {
-      // Delete old photo from Cloudinary if it exists
       if (official.photo) {
         const oldPublicId = getPublicIdFromUrl(official.photo);
         if (oldPublicId) {
-          await deleteFromCloudinary(oldPublicId).catch(err => 
+          await deleteFromCloudinary(oldPublicId).catch((err) =>
             console.error('Error deleting old photo:', err)
           );
         }
       }
-      updateData.photo = req.file.path || req.file.secure_url || req.file.url;
+      photoUrl = req.file.path || req.file.secure_url || req.file.url;
     } else if (req.body.photo !== undefined) {
-      updateData.photo = req.body.photo;
+      photoUrl = req.body.photo;
     }
 
-    // Track old committee to clean up if changed
-    const oldCommitteeRef = official.committeeRef?.toString();
-    const oldCommitteeRole = official.committeeRole;
+    const payload = await buildOfficialPayload({
+      reqBody: req.body,
+      existingOfficial: official,
+      photoUrl,
+    });
+
+    const updateData = { ...payload };
+
+    Object.keys(updateData).forEach((key) => {
+      if (updateData[key] === undefined) {
+        delete updateData[key];
+      }
+    });
 
     official = await Official.findByIdAndUpdate(req.params.id, updateData, {
       new: true,
       runValidators: true,
     });
 
-    // Auto-update committee membership if committeeRef or role changed
-    const newCommitteeRef = (committeeRef !== undefined ? committeeRef : oldCommitteeRef) || null;
-    const newCommitteeRole = (committeeRole !== undefined ? committeeRole : oldCommitteeRole) || '';
-
-    if (oldCommitteeRef && oldCommitteeRef !== newCommitteeRef) {
-      // Remove from old committee
-      await removeOfficialFromCommittee(official._id, oldCommitteeRef, oldCommitteeRole);
-    }
-    if (newCommitteeRef && newCommitteeRole) {
-      await syncOfficialToCommittee(official._id, newCommitteeRef, newCommitteeRole);
-    }
+    await syncOfficialCommitteeAssignments(official._id, updateData.committeeAssignments || []);
 
     res.status(200).json({
       success: true,
@@ -433,7 +597,7 @@ exports.toggleActive = async (req, res) => {
 // @access  Private (Admin)
 exports.reorderOfficials = async (req, res) => {
   try {
-    const { officials } = req.body; // Array of { id, displayOrder }
+    const { officials } = req.body;
 
     if (!Array.isArray(officials) || officials.length === 0) {
       return res.status(400).json({
@@ -442,7 +606,6 @@ exports.reorderOfficials = async (req, res) => {
       });
     }
 
-    // Bulk update using Promise.all
     const updatePromises = officials.map(({ id, displayOrder }) =>
       Official.findByIdAndUpdate(id, { displayOrder }, { new: true, runValidators: true })
     );
@@ -484,17 +647,18 @@ exports.deleteOfficial = async (req, res) => {
 
     const officialName = `${official.firstName} ${official.lastName}`;
     const officialPosition = official.position;
-    
-    // Delete photo from Cloudinary if it exists
+
+    await clearOfficialFromAllCommittees(official._id);
+
     if (official.photo) {
       const publicId = getPublicIdFromUrl(official.photo);
       if (publicId) {
-        await deleteFromCloudinary(publicId).catch(err => 
+        await deleteFromCloudinary(publicId).catch((err) =>
           console.error('Error deleting photo from Cloudinary:', err)
         );
       }
     }
-    
+
     await official.deleteOne();
 
     res.status(200).json({
@@ -525,7 +689,6 @@ exports.getOfficialsStats = async (req, res) => {
     const activeOfficials = await Official.countDocuments({ isActive: true });
     const inactiveOfficials = await Official.countDocuments({ isActive: false });
 
-    // Get officials by position
     const positionCounts = await Official.aggregate([
       {
         $group: {

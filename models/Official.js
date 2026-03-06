@@ -1,5 +1,15 @@
 const mongoose = require('mongoose');
 
+const BRANCH_ENUM = [
+  'Executive',
+  'Legislative',
+  'Administrative',
+  'Lupong Tagapamayapa',
+  'SK Council',
+  'Barangay Public Safety Officers (BPSO)',
+  'Other',
+];
+
 const officialSchema = new mongoose.Schema({
   firstName: {
     type: String,
@@ -60,9 +70,13 @@ const officialSchema = new mongoose.Schema({
   },
   branch: {
     type: String,
-    enum: ['Executive', 'Legislative', 'Administrative', 'Lupong Tagapamayapa', 'SK Council', 'Other'],
+    enum: BRANCH_ENUM,
     default: 'Legislative',
   },
+  branches: [{
+    type: String,
+    enum: BRANCH_ENUM,
+  }],
   committeeRef: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Committee',
@@ -72,6 +86,18 @@ const officialSchema = new mongoose.Schema({
     enum: ['chairperson', 'co_chairperson', 'coordinator', 'member', ''],
     default: '',
   },
+  committeeAssignments: [{
+    committeeRef: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Committee',
+      required: true,
+    },
+    committeeRole: {
+      type: String,
+      enum: ['chairperson', 'co_chairperson', 'coordinator', 'member', ''],
+      default: '',
+    },
+  }],
   officeHours: {
     type: String,
     trim: true,
