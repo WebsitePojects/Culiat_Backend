@@ -542,8 +542,18 @@ exports.webhook = async (req, res) => {
     const signature = req.headers["paymongo-signature"];
     const payload = JSON.stringify(req.body);
 
-    // Verify webhook signature if secret is configured
-    if (PAYMONGO_WEBHOOK_SECRET && signature) {
+    // SECURITY: Webhook signature verification is MANDATORY
+    if (!PAYMONGO_WEBHOOK_SECRET) {
+      console.error("[SECURITY] PAYMONGO_WEBHOOK_SECRET is not configured. Rejecting webhook.");
+      return res.status(500).json({ message: "Webhook signature verification not configured" });
+    }
+    if (!signature) {
+      console.warn("[SECURITY] Webhook request missing signature header");
+      return res.status(400).json({ message: "Missing webhook signature" });
+    }
+
+    // Verify webhook signature
+    {
       const [timestamp, testSignature, liveSignature] = signature
         .split(",")
         .map((s) => s.split("=")[1]);
@@ -557,7 +567,7 @@ exports.webhook = async (req, res) => {
         expectedSignature !== testSignature &&
         expectedSignature !== liveSignature
       ) {
-        console.warn("Invalid webhook signature");
+        console.warn("[SECURITY] Invalid webhook signature");
         return res.status(400).json({ message: "Invalid signature" });
       }
     }

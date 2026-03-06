@@ -1,5 +1,6 @@
 const TermsAcceptance = require("../models/TermsAcceptance");
 const { logActivity } = require("../utils/logHelper");
+const { escapeRegex } = require("../utils/securityUtils");
 
 // Current terms version
 const CURRENT_TERMS_VERSION = "1.0";
@@ -206,10 +207,11 @@ exports.getApprovedResidents = async (req, res) => {
 
     // Add search filter if provided
     if (search) {
+      const safeSearch = escapeRegex(search);
       query.$or = [
-        { firstName: { $regex: search, $options: "i" } },
-        { lastName: { $regex: search, $options: "i" } },
-        { email: { $regex: search, $options: "i" } },
+        { firstName: { $regex: safeSearch, $options: "i" } },
+        { lastName: { $regex: safeSearch, $options: "i" } },
+        { email: { $regex: safeSearch, $options: "i" } },
       ];
     }
 

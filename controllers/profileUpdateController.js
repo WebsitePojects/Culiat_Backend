@@ -2,6 +2,7 @@ const User = require("../models/User");
 const ProfileUpdate = require("../models/ProfileUpdate");
 const Settings = require("../models/Settings");
 const { sendProfileUpdateNotification, sendProfileUpdateApprovalEmail, sendProfileUpdateRejectionEmail } = require("../utils/emailService");
+const { escapeRegex } = require("../utils/securityUtils");
 
 /**
  * Helper function to get nested value from object using dot notation
@@ -520,6 +521,7 @@ exports.getAllProfileUpdates = async (req, res) => {
     let total;
     
     if (search) {
+      const safeSearch = escapeRegex(search);
       updates = await ProfileUpdate.aggregate([
         {
           $lookup: {
@@ -534,9 +536,9 @@ exports.getAllProfileUpdates = async (req, res) => {
           $match: {
             ...query,
             $or: [
-              { 'userDetails.firstName': { $regex: search, $options: 'i' } },
-              { 'userDetails.lastName': { $regex: search, $options: 'i' } },
-              { 'userDetails.email': { $regex: search, $options: 'i' } },
+              { 'userDetails.firstName': { $regex: safeSearch, $options: 'i' } },
+              { 'userDetails.lastName': { $regex: safeSearch, $options: 'i' } },
+              { 'userDetails.email': { $regex: safeSearch, $options: 'i' } },
             ],
           },
         },
@@ -559,9 +561,9 @@ exports.getAllProfileUpdates = async (req, res) => {
           $match: {
             ...query,
             $or: [
-              { 'userDetails.firstName': { $regex: search, $options: 'i' } },
-              { 'userDetails.lastName': { $regex: search, $options: 'i' } },
-              { 'userDetails.email': { $regex: search, $options: 'i' } },
+              { 'userDetails.firstName': { $regex: safeSearch, $options: 'i' } },
+              { 'userDetails.lastName': { $regex: safeSearch, $options: 'i' } },
+              { 'userDetails.email': { $regex: safeSearch, $options: 'i' } },
             ],
           },
         },

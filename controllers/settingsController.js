@@ -1,6 +1,8 @@
 const Settings = require("../models/Settings");
 const { logAction } = require("../utils/logHelper");
 const { LOGCONSTANTS } = require("../config/logConstants");
+const ROLES = require("../config/roles");
+const { stripDangerousKeys, safeErrorMessage } = require("../utils/securityUtils");
 
 // @desc    Get maintenance status
 // @route   GET /api/settings/maintenance-status
@@ -58,10 +60,31 @@ exports.getSettings = async (req, res) => {
       });
     }
 
-    // Return full settings for authenticated users
+    // Return full settings only for Admin/SuperAdmin, limited settings for regular users
+    if (req.user.role === ROLES.Admin || req.user.role === ROLES.SuperAdmin) {
+      return res.status(200).json({
+        success: true,
+        data: settingsObj,
+      });
+    }
+
+    // Authenticated non-admin users get public settings only
     res.status(200).json({
       success: true,
-      data: settingsObj,
+      data: {
+        siteInfo: settingsObj.siteInfo,
+        contactInfo: settingsObj.contactInfo,
+        socialMedia: settingsObj.socialMedia,
+        footer: settingsObj.footer,
+        theme: settingsObj.theme,
+        banner: {
+          enabled: settingsObj.banner?.enabled,
+          images: settingsObj.banner?.images,
+          autoRotate: settingsObj.banner?.autoRotate,
+          rotationInterval: settingsObj.banner?.rotationInterval,
+        },
+        termsAndConditions: settingsObj.termsAndConditions,
+      },
     });
   } catch (error) {
     console.error("Error fetching settings:", error);
@@ -88,23 +111,35 @@ exports.updateSettings = async (req, res) => {
       "footer",
       "banner",
       "theme",
-      "system",
       "termsAndConditions",
     ];
 
+    // SECURITY: 'system' field (maintenanceMode, registrationEnabled, etc.) requires SuperAdmin
+    if (req.body.system) {
+      if (req.user.role !== ROLES.SuperAdmin) {
+        return res.status(403).json({
+          success: false,
+          message: "Only SuperAdmin can modify system settings",
+        });
+      }
+      updateFields.push("system");
+    }
+
     updateFields.forEach((field) => {
       if (req.body[field]) {
+        // Strip dangerous keys to prevent prototype pollution
+        const sanitizedInput = stripDangerousKeys(req.body[field]);
         // Merge nested objects instead of replacing
         if (
-          typeof req.body[field] === "object" &&
-          !Array.isArray(req.body[field])
+          typeof sanitizedInput === "object" &&
+          !Array.isArray(sanitizedInput)
         ) {
           settings[field] = {
             ...settings[field].toObject(),
-            ...req.body[field],
+            ...sanitizedInput,
           };
         } else {
-          settings[field] = req.body[field];
+          settings[field] = sanitizedInput;
         }
       }
     });

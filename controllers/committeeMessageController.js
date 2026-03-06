@@ -1,6 +1,7 @@
 const CommitteeMessage = require('../models/CommitteeMessage');
 const Committee = require('../models/Committee');
 const Logs = require('../models/Logs');
+const { escapeRegex } = require('../utils/securityUtils');
 
 // @desc    Submit a new committee message
 // @route   POST /api/committee-messages
@@ -57,11 +58,12 @@ exports.getMessages = async (req, res) => {
     if (status) queryObject.status = status;
     if (committeeId) queryObject.committeeId = committeeId;
     if (search) {
+      const safeSearch = escapeRegex(search);
       queryObject.$or = [
-        { firstName: { $regex: search, $options: 'i' } },
-        { lastName: { $regex: search, $options: 'i' } },
-        { subject: { $regex: search, $options: 'i' } },
-        { message: { $regex: search, $options: 'i' } }
+        { firstName: { $regex: safeSearch, $options: 'i' } },
+        { lastName: { $regex: safeSearch, $options: 'i' } },
+        { subject: { $regex: safeSearch, $options: 'i' } },
+        { message: { $regex: safeSearch, $options: 'i' } }
       ];
     }
     if (dateFrom || dateTo) {

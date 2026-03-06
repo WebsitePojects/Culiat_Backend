@@ -1,6 +1,7 @@
 const ContactMessage = require('../models/ContactMessage');
 const { LOGCONSTANTS } = require('../config/logConstants');
 const { logAction } = require('../utils/logHelper');
+const { escapeRegex, sanitizeSortField } = require('../utils/securityUtils');
 
 // @desc    Submit a contact message (public or logged-in user)
 // @route   POST /api/contact-messages
@@ -102,14 +103,15 @@ exports.getAllContactMessages = async (req, res) => {
       }
     }
 
-    // Search filter
+    // Search filter - escape regex to prevent ReDoS
     if (search) {
+      const safeSearch = escapeRegex(search);
       filter.$or = [
-        { firstName: { $regex: search, $options: 'i' } },
-        { lastName: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-        { subject: { $regex: search, $options: 'i' } },
-        { message: { $regex: search, $options: 'i' } },
+        { firstName: { $regex: safeSearch, $options: 'i' } },
+        { lastName: { $regex: safeSearch, $options: 'i' } },
+        { email: { $regex: safeSearch, $options: 'i' } },
+        { subject: { $regex: safeSearch, $options: 'i' } },
+        { message: { $regex: safeSearch, $options: 'i' } },
       ];
     }
 

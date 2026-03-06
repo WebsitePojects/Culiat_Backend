@@ -26,6 +26,14 @@ const app = express();
 
 const path = require("path");
 
+// Disable X-Powered-By header globally
+app.disable('x-powered-by');
+
+// Trust proxy if behind a reverse proxy (for accurate IP in rate limiting)
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
 // Security Middleware - Apply before routes
 // 1. Security headers (XSS protection, clickjacking prevention, etc.)
 app.use(securityHeaders);
@@ -121,9 +129,15 @@ app.get("/api/health", (req, res) => {
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
+  
+  // Don't leak error details in production
+  const message = process.env.NODE_ENV === 'production' 
+    ? 'Internal Server Error' 
+    : err.message || 'Server Error';
+    
   res.status(err.status || 500).json({
     success: false,
-    message: err.message || "Server Error",
+    message,
   });
 });
 

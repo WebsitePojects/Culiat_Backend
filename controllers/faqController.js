@@ -1,6 +1,7 @@
 const FAQ = require("../models/FAQ");
 const { LOGCONSTANTS } = require("../config/logConstants");
 const { logAction } = require("../utils/logHelper");
+const { escapeRegex } = require("../utils/securityUtils");
 
 // @desc    Get all FAQs (for admin)
 // @route   GET /api/faqs/all
@@ -42,11 +43,12 @@ exports.getPublishedFAQs = async (req, res) => {
 
     if (category) filter.category = category;
 
-    // Add search functionality
+    // Add search functionality - escape regex to prevent ReDoS
     if (search) {
+      const safeSearch = escapeRegex(search);
       filter.$or = [
-        { question: { $regex: search, $options: "i" } },
-        { answer: { $regex: search, $options: "i" } },
+        { question: { $regex: safeSearch, $options: "i" } },
+        { answer: { $regex: safeSearch, $options: "i" } },
       ];
     }
 

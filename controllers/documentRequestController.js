@@ -1,9 +1,12 @@
 const DocumentRequest = require("../models/DocumentRequest");
 const Picture = require("../models/Picture");
 const Settings = require("../models/Settings");
+const ROLES = require("../config/roles");
 const { LOGCONSTANTS } = require("../config/logConstants");
 const { getRoleName } = require("../utils/roleHelpers");
 const { logAction } = require("../utils/logHelper");
+const { escapeRegex, sanitizeSortField } = require("../utils/securityUtils");
+const path = require("path");
 
 // Check if using Cloudinary
 const isCloudinaryEnabled = () => {
@@ -21,9 +24,9 @@ const getFileUrl = (file) => {
   if (isCloudinaryEnabled() && file.path && file.path.includes("cloudinary")) {
     return file.path;
   }
-  // Local storage - construct URL from path
-  const normalizedPath = file.path.replace(/\\/g, "/");
-  return `/${normalizedPath}`;
+  // Local storage - construct URL from path (sanitize to prevent path traversal)
+  const safeName = path.basename(file.path);
+  return `/uploads/${safeName}`;
 };
 
 // @desc    Create a new document request
@@ -550,17 +553,19 @@ exports.getDocumentHistory = async (req, res) => {
       }
     }
 
-    // Search filter (by control number or applicant name)
+    // Search filter (by control number or applicant name) - escape regex to prevent ReDoS
     if (search) {
+      const safeSearch = escapeRegex(search);
       filter.$or = [
-        { controlNumber: { $regex: search, $options: "i" } },
-        { firstName: { $regex: search, $options: "i" } },
-        { lastName: { $regex: search, $options: "i" } },
+        { controlNumber: { $regex: safeSearch, $options: "i" } },
+        { firstName: { $regex: safeSearch, $options: "i" } },
+        { lastName: { $regex: safeSearch, $options: "i" } },
       ];
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    const sortOptions = { [sortBy]: sortOrder === "desc" ? -1 : 1 };
+    const safeSortBy = sanitizeSortField(sortBy, ["createdAt", "updatedAt", "documentType", "status", "controlNumber"]);
+    const sortOptions = { [safeSortBy]: sortOrder === "desc" ? -1 : 1 };
 
     const [requests, total] = await Promise.all([
       DocumentRequest.find(filter)
@@ -856,18 +861,20 @@ exports.getDocumentPayments = async (req, res) => {
       }
     }
 
-    // Search filter
+    // Search filter - escape regex to prevent ReDoS
     if (search) {
+      const safeSearch = escapeRegex(search);
       filter.$or = [
-        { controlNumber: { $regex: search, $options: "i" } },
-        { paymentReference: { $regex: search, $options: "i" } },
-        { firstName: { $regex: search, $options: "i" } },
-        { lastName: { $regex: search, $options: "i" } },
+        { controlNumber: { $regex: safeSearch, $options: "i" } },
+        { paymentReference: { $regex: safeSearch, $options: "i" } },
+        { firstName: { $regex: safeSearch, $options: "i" } },
+        { lastName: { $regex: safeSearch, $options: "i" } },
       ];
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    const sortOptions = { [sortBy]: sortOrder === "desc" ? -1 : 1 };
+    const safeSortBy2 = sanitizeSortField(sortBy, ["createdAt", "updatedAt", "paidAt", "documentType", "status", "controlNumber"]);
+    const sortOptions = { [safeSortBy2]: sortOrder === "desc" ? -1 : 1 };
 
     const [payments, total, summary, breakdown] = await Promise.all([
       DocumentRequest.find(filter)

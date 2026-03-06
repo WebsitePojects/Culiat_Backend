@@ -4,12 +4,22 @@ const { sendVerificationCode } = require("../utils/emailService");
 const { LOGCONSTANTS } = require("../config/logConstants");
 const { logAction } = require("../utils/logHelper");
 
-// Store verification codes in memory (in production, use Redis)
+// Store verification codes in memory with TTL (in production, use Redis)
 const verificationCodes = new Map();
 
-// Generate 6-digit verification code
+// Clean up expired verification codes every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, value] of verificationCodes.entries()) {
+    if (value.expiresAt && now > value.expiresAt) {
+      verificationCodes.delete(key);
+    }
+  }
+}, 5 * 60 * 1000);
+
+// Generate cryptographically secure 6-digit verification code
 const generateVerificationCode = () => {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return crypto.randomInt(100000, 999999).toString();
 };
 
 // @desc    Get admin profile

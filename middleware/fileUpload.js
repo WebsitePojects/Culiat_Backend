@@ -95,8 +95,10 @@ const diskStorage = multer.diskStorage({
   },
   filename: function (req, file, cb) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const prefix = file.fieldname || 'file';
-    cb(null, prefix + '-' + uniqueSuffix + path.extname(file.originalname));
+    const prefix = (file.fieldname || 'file').replace(/[^a-zA-Z0-9_-]/g, '_');
+    // SECURITY: Use path.basename to prevent path traversal via originalname
+    const safeExt = path.extname(path.basename(file.originalname));
+    cb(null, prefix + '-' + uniqueSuffix + safeExt);
   }
 });
 

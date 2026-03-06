@@ -1,4 +1,5 @@
 const Hashtag = require('../models/Hashtag');
+const { escapeRegex } = require('../utils/securityUtils');
 
 /**
  * @desc    Get all hashtags
@@ -16,7 +17,7 @@ exports.getHashtags = async (req, res) => {
     }
     
     if (search) {
-      query.name = { $regex: search, $options: 'i' };
+      query.name = { $regex: escapeRegex(search), $options: 'i' };
     }
     
     const hashtags = await Hashtag.find(query)
@@ -83,7 +84,7 @@ exports.createHashtag = async (req, res) => {
     
     // Check if hashtag already exists
     const existingHashtag = await Hashtag.findOne({ 
-      name: { $regex: new RegExp(`^${cleanName}$`, 'i') } 
+      name: { $regex: new RegExp(`^${escapeRegex(cleanName)}$`, 'i') } 
     });
     
     if (existingHashtag) {
@@ -143,7 +144,7 @@ exports.updateHashtag = async (req, res) => {
       
       // Check if name already exists (excluding current hashtag)
       const existingHashtag = await Hashtag.findOne({ 
-        name: { $regex: new RegExp(`^${cleanName}$`, 'i') },
+        name: { $regex: new RegExp(`^${escapeRegex(cleanName)}$`, 'i') },
         _id: { $ne: req.params.id }
       });
       

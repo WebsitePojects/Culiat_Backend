@@ -36,7 +36,7 @@ const userSchema = new mongoose.Schema(
     password: {
       type: String,
       required: [true, "Password is required"],
-      // minlength: 6,
+      minlength: [8, "Password must be at least 8 characters"],
       select: false,
     },
     role: {
@@ -721,7 +721,7 @@ userSchema.pre("save", async function (next) {
   if (!this.isModified("password")) {
     return next();
   }
-  const salt = await bcrypt.genSalt(10);
+  const salt = await bcrypt.genSalt(12);
   this.password = await bcrypt.hash(this.password, salt);
   next();
 });
@@ -826,8 +826,17 @@ userSchema.methods.isPsaDeadlinePassed = function () {
   return daysLeft <= 0;
 };
 
-// Ensure virtuals are included in JSON
-userSchema.set("toJSON", { virtuals: true });
+// Ensure virtuals are included in JSON — strip sensitive fields
+userSchema.set("toJSON", {
+  virtuals: true,
+  transform: function (doc, ret) {
+    delete ret.password;
+    delete ret.resetPasswordToken;
+    delete ret.resetPasswordExpire;
+    delete ret.__v;
+    return ret;
+  },
+});
 userSchema.set("toObject", { virtuals: true });
 
 module.exports = mongoose.model("User", userSchema);

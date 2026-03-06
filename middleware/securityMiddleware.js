@@ -121,10 +121,11 @@ const rateLimiters = {
  * @param {string} str - Input string to sanitize
  * @returns {string} Sanitized string
  */
-const sanitizeString = (str) => {
+const sanitizeString = (str, options = {}) => {
+  const { encodeEntities = true } = options;
   if (typeof str !== 'string') return str;
-  
-  return str
+
+  const cleaned = str
     // Remove script tags
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
     // Remove on* event handlers
@@ -132,8 +133,13 @@ const sanitizeString = (str) => {
     // Remove javascript: protocol
     .replace(/javascript:/gi, '')
     // Remove data: protocol for potential XSS
-    .replace(/data:(?!image\/)/gi, '')
-    // Encode HTML entities
+    .replace(/data:(?!image\/)/gi, '');
+
+  if (!encodeEntities) {
+    return cleaned;
+  }
+
+  return cleaned
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -146,15 +152,15 @@ const sanitizeString = (str) => {
  * @param {*} obj - Object to sanitize
  * @returns {*} Sanitized object
  */
-const sanitizeObject = (obj) => {
+const sanitizeObject = (obj, options = {}) => {
   if (obj === null || obj === undefined) return obj;
   
   if (typeof obj === 'string') {
-    return sanitizeString(obj);
+    return sanitizeString(obj, options);
   }
   
   if (Array.isArray(obj)) {
-    return obj.map(item => sanitizeObject(item));
+    return obj.map(item => sanitizeObject(item, options));
   }
   
   if (typeof obj === 'object') {
@@ -164,7 +170,7 @@ const sanitizeObject = (obj) => {
       if (value && typeof value === 'object' && (value.buffer || value.path)) {
         sanitized[key] = value;
       } else {
-        sanitized[key] = sanitizeObject(value);
+        sanitized[key] = sanitizeObject(value, options);
       }
     }
     return sanitized;
@@ -178,6 +184,8 @@ const sanitizeObject = (obj) => {
  * Sanitizes req.body, req.query, and req.params
  */
 const inputSanitizer = (req, res, next) => {
+  const preserveHtmlEntities = req.path.startsWith('/api/committees');
+
   // Don't sanitize multipart/form-data as it may corrupt files
   const contentType = req.headers['content-type'] || '';
   if (contentType.includes('multipart/form-data')) {
@@ -185,12 +193,18 @@ const inputSanitizer = (req, res, next) => {
     if (req.body) {
       for (const [key, value] of Object.entries(req.body)) {
         if (typeof value === 'string') {
-          req.body[key] = sanitizeString(value);
+          req.body[key] = sanitizeString(value, {
+            encodeEntities: !preserveHtmlEntities,
+          });
         }
       }
     }
   } else {
-    if (req.body) req.body = sanitizeObject(req.body);
+    if (req.body) {
+      req.body = sanitizeObject(req.body, {
+        encodeEntities: !preserveHtmlEntities,
+      });
+    }
   }
   
   if (req.query) req.query = sanitizeObject(req.query);
@@ -200,10 +214,12 @@ const inputSanitizer = (req, res, next) => {
 };
 
 /**
- * NoSQL Injection Prevention
- * Prevents MongoDB operator injection
+ * NoSQL Injection Prevention & Prototype Pollution Protection
+ * Prevents MongoDB operator injection and prototype pollution attacks
  */
 const noSqlInjectionPrevention = (req, res, next) => {
+  const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
+  
   const sanitizeForNoSQL = (obj) => {
     if (typeof obj !== 'object' || obj === null) return obj;
     
@@ -212,7 +228,13 @@ const noSqlInjectionPrevention = (req, res, next) => {
     for (const [key, value] of Object.entries(obj)) {
       // Block MongoDB operators in keys
       if (typeof key === 'string' && key.startsWith('$')) {
-        console.warn(`Blocked potential NoSQL injection attempt: ${key}`);
+        console.warn(`[SECURITY] Blocked potential NoSQL injection attempt: ${key}`);
+        continue;
+      }
+      
+      // Block prototype pollution keys
+      if (dangerousKeys.includes(key)) {
+        console.warn(`[SECURITY] Blocked prototype pollution attempt: ${key}`);
         continue;
       }
       
@@ -237,8 +259,11 @@ const noSqlInjectionPrevention = (req, res, next) => {
  * Implements secure HTTP headers
  */
 const securityHeaders = (req, res, next) => {
+  // Remove X-Powered-By header to hide Express
+  res.removeHeader('X-Powered-By');
+  
   // Prevent clickjacking
-  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-Frame-Options', 'DENY');
   
   // Prevent MIME type sniffing
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -246,16 +271,26 @@ const securityHeaders = (req, res, next) => {
   // Enable XSS filter in browsers
   res.setHeader('X-XSS-Protection', '1; mode=block');
   
-  // Strict Transport Security (HSTS)
+  // Strict Transport Security (HSTS) with preload
   if (process.env.NODE_ENV === 'production') {
-    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
   }
   
   // Referrer Policy
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   
-  // Permissions Policy
-  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  // Permissions Policy - deny dangerous APIs
+  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=(), payment=(), usb=()');
+  
+  // Cross-Origin security headers
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+  
+  // X-Download-Options (IE)
+  res.setHeader('X-Download-Options', 'noopen');
+  
+  // X-Permitted-Cross-Domain-Policies
+  res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
   
   // Content Security Policy (basic)
   res.setHeader('Content-Security-Policy', 
@@ -320,11 +355,11 @@ const createCorsConfig = (allowedOrigins = []) => {
       // Allow requests with no origin (like mobile apps or curl)
       if (!origin) return callback(null, true);
       
-      // Check if origin is in allowed list or matches production patterns
+      // Check if origin is in allowed list or matches specific production domains
       if (origins.includes(origin) || 
-          origin.endsWith('.vercel.app') || 
-          origin.endsWith('.netlify.app') ||
-          origin.includes('barangayculiat.com')) {
+          origin === 'https://barangayculiat.vercel.app' ||
+          origin.endsWith('.barangayculiat.com') ||
+          origin === 'https://barangayculiat.com') {
         return callback(null, true);
       }
       

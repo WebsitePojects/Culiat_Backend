@@ -192,11 +192,13 @@ exports.getAnnouncement = async (req, res) => {
     let announcement;
     if (isObjectId) {
       announcement = await Announcement.findById(req.params.id)
-        .populate('publishedBy', 'firstName lastName email');
+        .populate('publishedBy', 'firstName lastName email')
+        .populate('committeeRef', 'name slug');
     } else {
       // Find by slug
       announcement = await Announcement.findOne({ slug: req.params.id })
-        .populate('publishedBy', 'firstName lastName email');
+        .populate('publishedBy', 'firstName lastName email')
+        .populate('committeeRef', 'name slug');
     }
 
     if (!announcement) {

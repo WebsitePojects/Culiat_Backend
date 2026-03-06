@@ -66,10 +66,10 @@ router.post("/login", rateLimiters.auth, login);  // Rate limiting for resident 
 router.post("/admin-login", rateLimiters.adminAuth, login);  // Strict rate limiting (3 attempts) for admin login
 router.post("/forgotpassword", rateLimiters.passwordReset, forgotPassword);  // Rate limit password reset
 router.put("/resetpassword/:resetToken", rateLimiters.passwordReset, resetPassword);
-router.post("/adminRegister", adminRegister);
+router.post("/adminRegister", protect, authorize(ROLES.SuperAdmin), rateLimiters.adminAuth, adminRegister);
 router.get("/me", protect, getMe);
-router.put("/profile", protect, updateProfile);
-router.put("/change-password", protect, changePassword);
+router.put("/profile", protect, rateLimiters.general, updateProfile);
+router.put("/change-password", protect, rateLimiters.auth, changePassword);
 
 // Admin routes for managing users
 router.get(

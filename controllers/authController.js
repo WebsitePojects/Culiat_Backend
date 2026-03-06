@@ -48,18 +48,11 @@ exports.register = async (req, res) => {
       });
     }
 
-    // Debug: Log received files and body
-    console.log('📁 Received files:', req.files ? Object.keys(req.files) : 'none');
-    console.log('📝 Received body keys:', Object.keys(req.body));
-    console.log('📋 Body data:', JSON.stringify({
-      username: req.body.username,
-      email: req.body.email,
-      firstName: req.body.firstName,
-      lastName: req.body.lastName,
-      residentType: req.body.residentType,
-      address: req.body.address ? 'present' : 'missing',
-      emergencyContact: req.body.emergencyContact ? 'present' : 'missing',
-    }, null, 2));
+    // Debug: Log received files and body (development only)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('📁 Received files:', req.files ? Object.keys(req.files) : 'none');
+      console.log('📝 Received body keys:', Object.keys(req.body));
+    }
     
     const {
       // Account credentials
@@ -444,19 +437,21 @@ exports.login = async (req, res) => {
     // Find user by username with password field
     const user = await User.findOne({ username }).select("+password");
 
-    // Debug logging
-    console.log("Login attempt for:", username);
-    console.log("User found:", user ? "Yes" : "No");
-    if (user) {
-      console.log("User isActive:", user.isActive);
-      console.log("User role:", user.role);
-      console.log("User registrationStatus:", user.registrationStatus);
+    // Debug logging (development only)
+    if (process.env.NODE_ENV === 'development') {
+      console.log("Login attempt for:", username);
+      console.log("User found:", user ? "Yes" : "No");
+      if (user) {
+        console.log("User isActive:", user.isActive);
+        console.log("User role:", user.role);
+        console.log("User registrationStatus:", user.registrationStatus);
+      }
     }
 
     if (!user) {
       return res.status(401).json({
         success: false,
-        message: "Invalid credentials - user not found",
+        message: "Invalid credentials",
       });
     }
 
@@ -1104,9 +1099,10 @@ exports.createUser = async (req, res) => {
       });
     }
 
-    // Use provided password or default temporary password
+    // Use provided password or generate a secure temporary password
     // Note: Password will be hashed by the User model's pre-save hook
-    const userPassword = password || "TempPassword123!";
+    const { generateSecurePassword: genPwd } = require("../utils/securityUtils");
+    const userPassword = password || genPwd();
 
     // Ensure role is a number (frontend might send as string)
     const roleCode = parseInt(role, 10);
@@ -1304,13 +1300,24 @@ exports.adminResetPassword = async (req, res) => {
       });
     }
 
+    // Validate password if provided, otherwise generate a secure temporary password
+    const { generateSecurePassword, validatePasswordComplexity } = require("../utils/securityUtils");
+    const passwordToSet = newPassword || generateSecurePassword();
+    
+    if (newPassword) {
+      const validation = validatePasswordComplexity(newPassword);
+      if (!validation.valid) {
+        return res.status(400).json({ success: false, message: validation.message });
+      }
+    }
+    
     // Set new password (pre-save hook will hash it)
-    user.password = newPassword || "TempPassword123!";
+    user.password = passwordToSet;
     await user.save();
 
     res.status(200).json({
       success: true,
-      message: `Password reset successfully for ${user.firstName} ${user.lastName}. New password: ${newPassword || "TempPassword123!"}`,
+      message: `Password reset successfully for ${user.firstName} ${user.lastName}. A temporary password has been set.`,
     });
   } catch (error) {
     console.error("Error resetting user password:", error);
@@ -1351,8 +1358,8 @@ exports.forgotPassword = async (req, res) => {
 
     await user.save();
 
-    // Create reset url to email
-    const resetUrl = `http://localhost:5173/reset-password/${resetToken}`;
+    // Create reset url to email - use FRONTEND_URL from environment
+    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password/${resetToken}`;
 
     // Message
     const message = `
@@ -1368,10 +1375,10 @@ exports.forgotPassword = async (req, res) => {
       //   text: message,
       // });
 
-      // Since we don't have an email service set up, we'll just return the token for testing
+      // Send password reset email (token is sent via email only, never in API response)
       res
         .status(200)
-        .json({ success: true, data: "Email Sent", testToken: resetToken });
+        .json({ success: true, data: "If the email exists, a password reset link has been sent." });
     } catch (error) {
       user.resetPasswordToken = undefined;
       user.resetPasswordExpire = undefined;
