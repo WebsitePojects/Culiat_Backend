@@ -80,6 +80,11 @@ const userSchema = new mongoose.Schema(
         default: "Culiat",
         immutable: true,
       },
+      district: {
+        type: String,
+        default: "District 6",
+        trim: true,
+      },
       postalCode: {
         type: String,
         default: "1128",
@@ -131,6 +136,11 @@ const userSchema = new mongoose.Schema(
         default: null,
       },
       barangay: {
+        type: String,
+        trim: true,
+        default: null,
+      },
+      district: {
         type: String,
         trim: true,
         default: null,
@@ -193,7 +203,7 @@ const userSchema = new mongoose.Schema(
     civilStatus: {
       type: String,
       enum: ["Single", "Married", "Widowed", "Separated", "Divorced", null],
-      default: null,
+      default: "Single",
     },
     nationality: {
       type: String,

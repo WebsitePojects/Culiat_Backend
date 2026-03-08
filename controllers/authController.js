@@ -99,6 +99,9 @@ exports.register = async (req, res) => {
       primaryID2Type,
     } = req.body;
 
+    const normalizedCivilStatus =
+      civilStatus && civilStatus !== "N/A" ? civilStatus : "Single";
+
     // Validate document combination based on resident type
     const docValidation = validateDocumentCombination(primaryID1Type, primaryID2Type, residentType);
     if (!docValidation.valid) {
@@ -316,7 +319,7 @@ exports.register = async (req, res) => {
       dateOfBirth,
       placeOfBirth,
       gender,
-      civilStatus,
+      civilStatus: normalizedCivilStatus,
       nationality,
       phoneNumber,
       tinNumber: tinNumber || "N/A",
@@ -331,9 +334,27 @@ exports.register = async (req, res) => {
       // Resident type
       residentType: residentType || "resident",
       // Address for residents - parse if stringified JSON
-      address: residentType === "non_resident" ? undefined : (address ? (typeof address === 'string' ? JSON.parse(address) : address) : undefined),
+      address: residentType === "non_resident"
+        ? undefined
+        : (() => {
+            const parsedAddress = address
+              ? typeof address === "string"
+                ? JSON.parse(address)
+                : address
+              : {};
+            return {
+              ...parsedAddress,
+              district: parsedAddress?.district || "District 6",
+            };
+          })(),
       // Non-resident address
-      nonResidentAddress: residentType === "non_resident" ? (nonResidentAddress ? (typeof nonResidentAddress === 'string' ? JSON.parse(nonResidentAddress) : nonResidentAddress) : null) : null,
+      nonResidentAddress: residentType === "non_resident"
+        ? nonResidentAddress
+          ? typeof nonResidentAddress === "string"
+            ? JSON.parse(nonResidentAddress)
+            : nonResidentAddress
+          : null
+        : null,
       spouseInfo: spouseInfo ? (typeof spouseInfo === 'string' ? JSON.parse(spouseInfo) : spouseInfo) : null,
       emergencyContact: emergencyContact ? (typeof emergencyContact === 'string' ? JSON.parse(emergencyContact) : emergencyContact) : null,
       birthCertificate: birthCertificateData,
