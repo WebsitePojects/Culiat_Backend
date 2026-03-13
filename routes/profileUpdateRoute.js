@@ -126,18 +126,18 @@ router.delete("/cancel/:id", protect, cancelProfileUpdate);
 // ============================================
 
 // Get all profile update requests
-router.get("/admin/all", protect, authorize(ROLES.SuperAdmin, ROLES.Admin), getAllProfileUpdates);
+router.get("/admin/all", protect, authorize(ROLES.SystemAdmin, ROLES.SuperAdmin, ROLES.Admin), getAllProfileUpdates);
 
 // Get single profile update detail
-router.get("/admin/:id", protect, authorize(ROLES.SuperAdmin, ROLES.Admin), getProfileUpdateDetail);
+router.get("/admin/:id", protect, authorize(ROLES.SystemAdmin, ROLES.SuperAdmin, ROLES.Admin), getProfileUpdateDetail);
 
 // Approve profile update
-router.put("/admin/:id/approve", protect, authorize(ROLES.SuperAdmin, ROLES.Admin), approveProfileUpdate);
+router.put("/admin/:id/approve", protect, authorize(ROLES.SystemAdmin, ROLES.SuperAdmin, ROLES.Admin), approveProfileUpdate);
 
 // Reject profile update
-router.put("/admin/:id/reject", protect, authorize(ROLES.SuperAdmin, ROLES.Admin), rejectProfileUpdate);
+router.put("/admin/:id/reject", protect, authorize(ROLES.SystemAdmin, ROLES.SuperAdmin, ROLES.Admin), rejectProfileUpdate);
 
 // Get user's complete profile with history
-router.get("/admin/user/:userId", protect, authorize(ROLES.SuperAdmin, ROLES.Admin), getUserProfileWithHistory);
+router.get("/admin/user/:userId", protect, authorize(ROLES.SystemAdmin, ROLES.SuperAdmin, ROLES.Admin), getUserProfileWithHistory);
 
 module.exports = router;
