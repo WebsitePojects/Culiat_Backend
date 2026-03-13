@@ -3,6 +3,14 @@ const ProfileUpdate = require("../models/ProfileUpdate");
 const Settings = require("../models/Settings");
 const { sendProfileUpdateNotification, sendProfileUpdateApprovalEmail, sendProfileUpdateRejectionEmail } = require("../utils/emailService");
 const { escapeRegex } = require("../utils/securityUtils");
+const { getUserDisplayNameWithWebsiteAdminTag } = require("../utils/roleHelpers");
+
+const attachReviewedByDisplayName = (record) => {
+  const data = record?.toObject ? record.toObject() : record;
+  if (!data) return data;
+  data.reviewedByDisplayName = getUserDisplayNameWithWebsiteAdminTag(data.reviewedBy);
+  return data;
+};
 
 /**
  * Helper function to get nested value from object using dot notation
@@ -440,12 +448,14 @@ exports.getMyUpdateHistory = async (req, res) => {
       .skip((page - 1) * limit)
       .limit(parseInt(limit))
       .populate('reviewedBy', 'firstName lastName');
+
+    const transformedUpdates = updates.map(attachReviewedByDisplayName);
     
     const total = await ProfileUpdate.countDocuments(query);
     
     res.status(200).json({
       success: true,
-      data: updates,
+      data: transformedUpdates,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -577,6 +587,8 @@ exports.getAllProfileUpdates = async (req, res) => {
         .limit(parseInt(limit))
         .populate('user', 'firstName lastName middleName email username')
         .populate('reviewedBy', 'firstName lastName');
+
+      updates = updates.map(attachReviewedByDisplayName);
       
       total = await ProfileUpdate.countDocuments(query);
     }
@@ -643,7 +655,7 @@ exports.getProfileUpdateDetail = async (req, res) => {
     
     res.status(200).json({
       success: true,
-      data: update,
+      data: attachReviewedByDisplayName(update),
     });
   } catch (error) {
     console.error("Error fetching profile update detail:", error);
@@ -687,6 +699,13 @@ exports.approveProfileUpdate = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: "User not found",
+      });
+    }
+
+    if (String(user._id) === String(req.user._id)) {
+      return res.status(403).json({
+        success: false,
+        message: "You cannot approve your own profile update request",
       });
     }
     
@@ -770,6 +789,13 @@ exports.rejectProfileUpdate = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: `This request has already been ${update.status}`,
+      });
+    }
+
+    if (String(update.user._id) === String(req.user._id)) {
+      return res.status(403).json({
+        success: false,
+        message: "You cannot reject your own profile update request",
       });
     }
     

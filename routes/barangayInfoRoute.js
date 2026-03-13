@@ -17,12 +17,12 @@ const ROLES = require('../config/roles');
 router.get('/', getBarangayInfo);
 
 // Admin routes
-router.post('/', protect, authorize(ROLES.SuperAdmin), createBarangayInfo);
-router.put('/', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), updateBarangayInfo);
-router.put('/demographics', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), updateDemographics);
-router.put('/contact', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), updateContactInfo);
-router.put('/address', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), updateAddress);
-router.put('/social-media', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), updateSocialMedia);
-router.delete('/', protect, authorize(ROLES.SuperAdmin), deleteBarangayInfo);
+router.post('/', protect, authorize(ROLES.SystemAdmin), createBarangayInfo);
+router.put('/', protect, authorize(ROLES.SystemAdmin, ROLES.SuperAdmin), updateBarangayInfo);
+router.put('/demographics', protect, authorize(ROLES.SystemAdmin, ROLES.SuperAdmin), updateDemographics);
+router.put('/contact', protect, authorize(ROLES.SystemAdmin, ROLES.SuperAdmin), updateContactInfo);
+router.put('/address', protect, authorize(ROLES.SystemAdmin, ROLES.SuperAdmin), updateAddress);
+router.put('/social-media', protect, authorize(ROLES.SystemAdmin, ROLES.SuperAdmin), updateSocialMedia);
+router.delete('/', protect, authorize(ROLES.SystemAdmin), deleteBarangayInfo);
 
 module.exports = router;

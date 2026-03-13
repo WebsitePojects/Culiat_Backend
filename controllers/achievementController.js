@@ -42,7 +42,9 @@ const deleteOldImage = async (imageUrl) => {
 // @access  Public
 exports.getAchievements = async (req, res) => {
   try {
-    const achievements = await Achievement.find().sort({ date: -1 });
+    const achievements = await Achievement.find()
+      .populate('committeeRef', 'name slug')
+      .sort({ date: -1 });
     res.status(200).json({
       success: true,
       count: achievements.length,
@@ -62,7 +64,8 @@ exports.getAchievements = async (req, res) => {
 // @access  Public
 exports.getAchievement = async (req, res) => {
   try {
-    const achievement = await Achievement.findById(req.params.id);
+    const achievement = await Achievement.findById(req.params.id)
+      .populate('committeeRef', 'name slug');
 
     if (!achievement) {
       return res.status(404).json({
@@ -89,7 +92,7 @@ exports.getAchievement = async (req, res) => {
 // @access  Private (Admin)
 exports.createAchievement = async (req, res) => {
   try {
-    const { title, category, description, date, hashtags } = req.body;
+    const { title, category, description, date, hashtags, committeeRef } = req.body;
     
     let image = 'no-photo.jpg';
     let images = [];
@@ -125,6 +128,7 @@ exports.createAchievement = async (req, res) => {
       date,
       image,
       images,
+      committeeRef: committeeRef || null,
       hashtags: parsedHashtags
     });
 
@@ -159,7 +163,8 @@ exports.updateAchievement = async (req, res) => {
       title: req.body.title,
       category: req.body.category,
       description: req.body.description,
-      date: req.body.date
+      date: req.body.date,
+      committeeRef: req.body.committeeRef || null,
     };
 
     // Handle hashtags

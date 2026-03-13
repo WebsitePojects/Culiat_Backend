@@ -20,30 +20,30 @@ router.get("/", protect, getSettings);
 router.get("/maintenance-status", getMaintenanceStatus);
 
 // Protected routes - Admin only
-router.put("/", protect, authorize("Admin", "SuperAdmin"), updateSettings);
+router.put("/", protect, authorize("SystemAdmin", "SuperAdmin"), updateSettings);
 router.put(
   "/site-info",
   protect,
-  authorize("Admin", "SuperAdmin"),
+  authorize("SystemAdmin", "SuperAdmin"),
   updateSiteInfo
 );
 router.put(
   "/contact-info",
   protect,
-  authorize("Admin", "SuperAdmin"),
+  authorize("SystemAdmin", "SuperAdmin"),
   updateContactInfo
 );
 router.put(
   "/social-media",
   protect,
-  authorize("Admin", "SuperAdmin"),
+  authorize("SystemAdmin", "SuperAdmin"),
   updateSocialMedia
 );
-router.put("/footer", protect, authorize("Admin", "SuperAdmin"), updateFooter);
-router.put("/theme", protect, authorize("Admin", "SuperAdmin"), updateTheme);
-router.put("/system", protect, authorize("Admin", "SuperAdmin"), updateSettings);
+router.put("/footer", protect, authorize("SystemAdmin", "SuperAdmin"), updateFooter);
+router.put("/theme", protect, authorize("SystemAdmin", "SuperAdmin"), updateTheme);
+router.put("/system", protect, authorize("SystemAdmin", "SuperAdmin"), updateSettings);
 
-// SuperAdmin only
-router.post("/reset", protect, authorize("SuperAdmin"), resetSettings);
+// SystemAdmin only
+router.post("/reset", protect, authorize("SystemAdmin"), resetSettings);
 
 module.exports = router;

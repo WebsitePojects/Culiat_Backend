@@ -6,6 +6,7 @@ const {
 } = require("../utils/documentGenerator");
 const { LOGCONSTANTS } = require("../config/logConstants");
 const { logAction } = require("../utils/logHelper");
+const { getUserDisplayNameWithWebsiteAdminTag } = require("../utils/roleHelpers");
 const path = require("path");
 const fs = require("fs");
 const axios = require("axios");
@@ -90,7 +91,13 @@ const calculateTotalWithCommission = (basePrice) => {
 /**
  * Format date in official government format (e.g., "7th day of December 2025")
  */
+const isValidDate = (value) => {
+  const parsedDate = new Date(value);
+  return !Number.isNaN(parsedDate.getTime());
+};
+
 const formatOfficialDate = (date) => {
+  if (!isValidDate(date)) return "";
   const d = new Date(date);
   const day = d.getDate();
   const month = d.toLocaleDateString("en-PH", { month: "long" });
@@ -110,7 +117,7 @@ const formatOfficialDate = (date) => {
  * Format date as MM-DD-YYYY (for Barangay ID birth date)
  */
 const formatShortDate = (date) => {
-  if (!date) return "";
+  if (!date || !isValidDate(date)) return "";
   const d = new Date(date);
   const month = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
@@ -122,7 +129,7 @@ const formatShortDate = (date) => {
  * Format date as MM/DD/YYYY (for Barangay ID issue/expiration dates)
  */
 const formatSlashDate = (date) => {
-  if (!date) return "";
+  if (!date || !isValidDate(date)) return "";
   const d = new Date(date);
   const month = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
@@ -134,7 +141,7 @@ const formatSlashDate = (date) => {
  * Calculate expiration date based on Philippine standards
  */
 const calculateExpirationDate = (documentType, issueDate = new Date()) => {
-  const d = new Date(issueDate);
+  const d = isValidDate(issueDate) ? new Date(issueDate) : new Date();
   
   switch (documentType) {
     case "barangay_id":
@@ -183,7 +190,7 @@ const getSalutation = (requestData) => {
  * Calculate age from date of birth
  */
 const calculateAge = (dateOfBirth) => {
-  if (!dateOfBirth) return "";
+  if (!dateOfBirth || !isValidDate(dateOfBirth)) return "";
   const today = new Date();
   const birthDate = new Date(dateOfBirth);
   let age = today.getFullYear() - birthDate.getFullYear();
@@ -615,11 +622,7 @@ exports.generateDocumentFile = async (req, res) => {
 
       // ========== CERTIFICATE OF RESIDENCY SPECIFIC FIELDS ==========
       residency_since: documentRequest.residencyInfo?.residencySince || "",
-      // prepared_by uses only the admin's first name in Pascal case
-      prepared_by: req.user?.firstName
-        ? req.user.firstName.charAt(0).toUpperCase() +
-          req.user.firstName.slice(1).toLowerCase()
-        : "",
+      prepared_by: getUserDisplayNameWithWebsiteAdminTag(req.user),
       // reference_no and document_file_no are auto-generated
       reference_no: generateReferenceNo(documentRequest),
       document_file_no: generateDocumentFileNo(documentRequest),
@@ -1009,7 +1012,7 @@ exports.getDocumentPreview = async (req, res) => {
       documentFileNo: generateDocumentFileNo(documentRequest),
       issueDate: formatOfficialDate(new Date()),
       issueDateShort: formatSlashDate(new Date()),
-      validUntil: formatSlashDate(getExpirationDate(new Date())),
+      validUntil: formatSlashDate(documentRequest.expirationDate || calculateExpirationDate(documentRequest.documentType)),
       
       // Personal Information
       fullName: buildFullName(
@@ -1071,9 +1074,7 @@ exports.getDocumentPreview = async (req, res) => {
       // Officials
       barangayCaptain,
       barangaySecretary,
-      preparedBy: req.user?.firstName
-        ? req.user.firstName.charAt(0).toUpperCase() + req.user.firstName.slice(1).toLowerCase()
-        : "",
+      preparedBy: getUserDisplayNameWithWebsiteAdminTag(req.user),
       
       // Business Information
       businessName: (documentRequest.businessInfo?.businessName || "").toUpperCase(),

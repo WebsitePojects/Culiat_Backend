@@ -3,9 +3,16 @@ const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const User = require("../models/User");
 const Settings = require("../models/Settings");
+const ROLES = require("../config/roles");
 const { LOGCONSTANTS } = require("../config/logConstants");
-const { getRoleName } = require("../utils/roleHelpers");
+const { getRoleName, getUserDisplayNameWithWebsiteAdminTag } = require("../utils/roleHelpers");
 const { logAction } = require("../utils/logHelper");
+const {
+  normalizeRoleCodes,
+  getPrimaryRole,
+  hasRole,
+  isSameUser,
+} = require("../utils/roleAccess");
 const { getDocumentTypeLabel, isGovernmentID, isEndorsementLetter, validateDocumentCombination } = require("../config/documentTypes");
 const { sendRegistrationApprovedEmail, sendRegistrationRejectedEmail } = require("../utils/emailService");
 
@@ -32,6 +39,21 @@ const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
     expiresIn: "30d",
   });
+};
+
+const getUserRoleCodes = (user) =>
+  normalizeRoleCodes([...(Array.isArray(user?.roles) ? user.roles : []), user?.role]);
+
+const getUserRoleNames = (user) => getUserRoleCodes(user).map((code) => getRoleName(code));
+
+const parseRolesFromPayload = (payload, fallback = [ROLES.Resident]) => {
+  const requested = Array.isArray(payload?.roles) && payload.roles.length
+    ? payload.roles
+    : payload?.role !== undefined
+      ? [payload.role]
+      : fallback;
+
+  return normalizeRoleCodes(requested);
 };
 
 // @desc    Register a new user
@@ -367,7 +389,8 @@ exports.register = async (req, res) => {
       primaryID2: primaryID2Data,
       primaryID2Back: primaryID2BackData,
       primaryID2Type: primaryID2Type || null,
-      role: 74934, // Resident role
+      role: ROLES.Resident,
+      roles: [ROLES.Resident],
       registrationStatus: "pending", // Pending admin approval
       // Set PSA completion deadline to 3 months from now
       psaCompletion: {
@@ -396,6 +419,7 @@ exports.register = async (req, res) => {
         _id: user._id,
         firstName: user.firstName,
         lastName: user.lastName,
+        displayName: getUserDisplayNameWithWebsiteAdminTag(user),
         email: user.email,
         registrationStatus: user.registrationStatus,
       },
@@ -496,7 +520,7 @@ exports.login = async (req, res) => {
     }
 
     // Check if PSA completion deadline has passed for residents
-    if (user.role === 74934 && user.psaCompletion && !user.psaCompletion.isComplete) {
+    if (hasRole(user, ROLES.Resident) && user.psaCompletion && !user.psaCompletion.isComplete) {
       const deadline = user.psaCompletion.deadline;
       if (deadline && new Date() > new Date(deadline)) {
         // Lock the account
@@ -517,7 +541,7 @@ exports.login = async (req, res) => {
     }
 
     // Check if resident registration is approved
-    if (user.role === 74934 && user.registrationStatus === "pending") {
+    if (hasRole(user, ROLES.Resident) && user.registrationStatus === "pending") {
       return res.status(403).json({
         success: false,
         message:
@@ -525,7 +549,7 @@ exports.login = async (req, res) => {
       });
     }
 
-    if (user.role === 74934 && user.registrationStatus === "rejected") {
+    if (hasRole(user, ROLES.Resident) && user.registrationStatus === "rejected") {
       return res.status(403).json({
         success: false,
         message: `Your registration was rejected. Reason: ${
@@ -571,6 +595,15 @@ exports.login = async (req, res) => {
       });
     }
 
+    const isAdminLoginRequest = (req.originalUrl || "").includes("/admin-login");
+    if (isAdminLoginRequest && !hasRole(user, ROLES.SystemAdmin, ROLES.SuperAdmin, ROLES.Admin)) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Access denied: Only administrators can access this portal. Residents should use the resident login page.",
+      });
+    }
+
     // Generate token
     const token = generateToken(user._id);
 
@@ -585,6 +618,8 @@ exports.login = async (req, res) => {
         email: user.email,
         role: getRoleName(user.role),
         roleCode: user.role,
+        roles: getUserRoleCodes(user),
+        roleNames: getUserRoleNames(user),
         token,
       },
     });
@@ -611,11 +646,14 @@ exports.getMe = async (req, res) => {
         username: user.username,
         firstName: user.firstName,
         lastName: user.lastName,
+        displayName: getUserDisplayNameWithWebsiteAdminTag(user),
         middleName: user.middleName,
         suffix: user.suffix,
         email: user.email,
         role: getRoleName(user.role),
         roleCode: user.role,
+        roles: getUserRoleCodes(user),
+        roleNames: getUserRoleNames(user),
         address: user.address,
         phoneNumber: user.phoneNumber,
         dateOfBirth: user.dateOfBirth,
@@ -641,7 +679,7 @@ exports.getMe = async (req, res) => {
         isActive: user.isActive,
         createdAt: user.createdAt,
         // PSA Profile completion status (for residents)
-        psaCompletion: user.role === 74934 ? {
+        psaCompletion: hasRole(user, ROLES.Resident) ? {
           deadline: user.psaCompletion?.deadline,
           isComplete: user.psaCompletion?.isComplete || false,
           daysLeft: user.getDaysUntilPsaDeadline ? user.getDaysUntilPsaDeadline() : null,
@@ -649,7 +687,7 @@ exports.getMe = async (req, res) => {
           isPassed: user.isPsaDeadlinePassed ? user.isPsaDeadlinePassed() : false,
           warningDismissedAt: user.psaCompletion?.warningDismissedAt,
         } : null,
-        profileVerification: user.role === 74934 ? user.profileVerification : null,
+        profileVerification: hasRole(user, ROLES.Resident) ? user.profileVerification : null,
       },
     });
   } catch (error) {
@@ -846,7 +884,8 @@ exports.residentRegister = async (req, res) => {
       password,
       address,
       phoneNumber,
-      role: 74934, // Resident
+      role: ROLES.Resident,
+      roles: [ROLES.Resident],
       registrationStatus: "pending",
       proofOfResidency: getFileUrl(req.file),
     });
@@ -1073,6 +1112,9 @@ exports.getAllUsers = async (req, res) => {
     const usersWithRoleNames = users.map((user) => {
       const userObj = user.toObject();
       userObj.roleName = getRoleName(user.role);
+      userObj.displayName = getUserDisplayNameWithWebsiteAdminTag(user);
+      userObj.roles = getUserRoleCodes(user);
+      userObj.roleNames = getUserRoleNames(user);
       userObj.age = user.age; // Virtual field
       return userObj;
     });
@@ -1091,18 +1133,72 @@ exports.getAllUsers = async (req, res) => {
   }
 };
 
+// @desc    Check username availability
+// @route   GET /api/auth/check-username/:username
+// @access  Private/Admin
+exports.checkUsernameAvailability = async (req, res) => {
+  try {
+    const rawUsername = req.params.username || "";
+    const username = rawUsername.trim();
+
+    if (!username || username.length < 3) {
+      return res.status(400).json({
+        success: false,
+        message: "Username must be at least 3 characters",
+      });
+    }
+
+    const existingUser = await User.findOne({
+      username: { $regex: `^${username.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}$`, $options: "i" },
+    }).select("_id");
+
+    res.status(200).json({
+      success: true,
+      available: !existingUser,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error checking username availability",
+      error: error.message,
+    });
+  }
+};
+
 // @desc    Create a new user (Admin creates staff/admin users)
 // @route   POST /api/auth/users
 // @access  Private/Admin
 exports.createUser = async (req, res) => {
   try {
-    const { firstName, lastName, email, username, phoneNumber, role, password } = req.body;
+    const { firstName, lastName, email, username, phoneNumber, password } = req.body;
+    const roles = parseRolesFromPayload(req.body, [ROLES.Resident]);
 
     // Validate required fields
-    if (!firstName || !lastName || !email || !username || !role) {
+    if (!firstName || !lastName || !email || !username || !password) {
       return res.status(400).json({
         success: false,
-        message: "Please provide all required fields: firstName, lastName, email, username, role",
+        message: "Please provide all required fields: firstName, lastName, email, username, password",
+      });
+    }
+
+    if (String(password).length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 8 characters",
+      });
+    }
+
+    if (!roles.length) {
+      return res.status(400).json({
+        success: false,
+        message: "At least one valid role is required",
+      });
+    }
+
+    if (!hasRole(req.user, ROLES.SystemAdmin) && roles.includes(ROLES.SystemAdmin)) {
+      return res.status(403).json({
+        success: false,
+        message: "Only System Admin can assign System Admin role",
       });
     }
 
@@ -1120,21 +1216,7 @@ exports.createUser = async (req, res) => {
       });
     }
 
-    // Use provided password or generate a secure temporary password
-    // Note: Password will be hashed by the User model's pre-save hook
-    const { generateSecurePassword: genPwd } = require("../utils/securityUtils");
-    const userPassword = password || genPwd();
-
-    // Ensure role is a number (frontend might send as string)
-    const roleCode = parseInt(role, 10);
-    
-    // Validate role code
-    if (![74932, 74933, 74934].includes(roleCode)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid role code",
-      });
-    }
+    const primaryRole = getPrimaryRole(roles);
 
     // Create user
     const user = await User.create({
@@ -1143,8 +1225,9 @@ exports.createUser = async (req, res) => {
       email,
       username,
       phoneNumber,
-      role: roleCode, // Role code from frontend (converted to number)
-      password: userPassword,
+      role: primaryRole,
+      roles,
+      password,
       registrationStatus: "approved", // Auto-approve admin-created users
       isActive: true,
     });
@@ -1153,8 +1236,8 @@ exports.createUser = async (req, res) => {
     await logAction(
       LOGCONSTANTS.actions.user.CREATE_USER,
       req.user._id,
-      `Admin created new user: ${firstName} ${lastName} (${getRoleName(role)})`,
-      { targetUserId: user._id, role: getRoleName(role) }
+      `Admin created new user: ${firstName} ${lastName} (${getUserRoleNames(user).join(", ")})`,
+      { targetUserId: user._id, roles: getUserRoleNames(user) }
     );
 
     res.status(201).json({
@@ -1168,6 +1251,8 @@ exports.createUser = async (req, res) => {
         username: user.username,
         role: user.role,
         roleName: getRoleName(user.role),
+        roles: getUserRoleCodes(user),
+        roleNames: getUserRoleNames(user),
       },
     });
   } catch (error) {
@@ -1186,13 +1271,23 @@ exports.createUser = async (req, res) => {
 exports.updateUserById = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { firstName, lastName, email, phoneNumber, role, isActive } = req.body;
+    const { firstName, lastName, email, phoneNumber, isActive } = req.body;
+    const requestedRoles = req.body.role !== undefined || Array.isArray(req.body.roles)
+      ? parseRolesFromPayload(req.body, [])
+      : null;
 
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({
         success: false,
         message: "User not found",
+      });
+    }
+
+    if (!hasRole(req.user, ROLES.SystemAdmin) && hasRole(user, ROLES.SystemAdmin)) {
+      return res.status(403).json({
+        success: false,
+        message: "Only System Admin can modify System Admin accounts",
       });
     }
 
@@ -1212,11 +1307,23 @@ exports.updateUserById = async (req, res) => {
     if (lastName) user.lastName = lastName;
     if (email) user.email = email;
     if (phoneNumber !== undefined) user.phoneNumber = phoneNumber;
-    if (role) {
-      const roleCode = parseInt(role, 10);
-      if ([74932, 74933, 74934].includes(roleCode)) {
-        user.role = roleCode;
+    if (requestedRoles !== null) {
+      if (!requestedRoles.length) {
+        return res.status(400).json({
+          success: false,
+          message: "At least one valid role is required",
+        });
       }
+
+      if (!hasRole(req.user, ROLES.SystemAdmin) && requestedRoles.includes(ROLES.SystemAdmin)) {
+        return res.status(403).json({
+          success: false,
+          message: "Only System Admin can assign System Admin role",
+        });
+      }
+
+      user.roles = requestedRoles;
+      user.role = getPrimaryRole(requestedRoles);
     }
     if (typeof isActive === 'boolean') user.isActive = isActive;
 
@@ -1242,6 +1349,8 @@ exports.updateUserById = async (req, res) => {
         phoneNumber: user.phoneNumber,
         role: user.role,
         roleName: getRoleName(user.role),
+        roles: getUserRoleCodes(user),
+        roleNames: getUserRoleNames(user),
         isActive: user.isActive,
       },
     });
@@ -1271,10 +1380,17 @@ exports.deleteUserById = async (req, res) => {
     }
 
     // Prevent deleting yourself
-    if (user._id.toString() === req.user._id.toString()) {
+    if (isSameUser(user._id, req.user._id)) {
       return res.status(400).json({
         success: false,
         message: "You cannot delete your own account",
+      });
+    }
+
+    if (!hasRole(req.user, ROLES.SystemAdmin) && hasRole(user, ROLES.SystemAdmin)) {
+      return res.status(403).json({
+        success: false,
+        message: "Only System Admin can delete System Admin accounts",
       });
     }
 
@@ -1305,6 +1421,159 @@ exports.deleteUserById = async (req, res) => {
   }
 };
 
+// @desc    Bulk update users (Admin)
+// @route   PATCH /api/auth/users/bulk-update
+// @access  Private/Admin
+exports.bulkUpdateUsers = async (req, res) => {
+  try {
+    const { userIds, role, roles, isActive } = req.body;
+
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "userIds must be a non-empty array",
+      });
+    }
+
+    if (userIds.length > 200) {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot update more than 200 users at once",
+      });
+    }
+
+    const shouldUpdateRoles = role !== undefined || Array.isArray(roles);
+    const requestedRoles = shouldUpdateRoles ? parseRolesFromPayload({ role, roles }, []) : null;
+
+    if (shouldUpdateRoles && !requestedRoles.length) {
+      return res.status(400).json({
+        success: false,
+        message: "At least one valid role is required",
+      });
+    }
+
+    if (shouldUpdateRoles && !hasRole(req.user, ROLES.SystemAdmin) && requestedRoles.includes(ROLES.SystemAdmin)) {
+      return res.status(403).json({
+        success: false,
+        message: "Only System Admin can assign System Admin role",
+      });
+    }
+
+    const targetUsers = await User.find({ _id: { $in: userIds } });
+
+    if (!targetUsers.length) {
+      return res.status(404).json({ success: false, message: "No users found" });
+    }
+
+    if (!hasRole(req.user, ROLES.SystemAdmin) && targetUsers.some((user) => hasRole(user, ROLES.SystemAdmin))) {
+      return res.status(403).json({
+        success: false,
+        message: "Only System Admin can modify System Admin accounts",
+      });
+    }
+
+    for (const targetUser of targetUsers) {
+      if (shouldUpdateRoles) {
+        targetUser.roles = requestedRoles;
+        targetUser.role = getPrimaryRole(requestedRoles);
+      }
+      if (typeof isActive === "boolean") {
+        targetUser.isActive = isActive;
+      }
+      await targetUser.save();
+    }
+
+    await logAction(
+      LOGCONSTANTS.actions.user.UPDATE_USER,
+      req.user._id,
+      `Bulk updated ${targetUsers.length} users`,
+      { targetUserIds: userIds }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: `Updated ${targetUsers.length} users successfully`,
+      data: {
+        updatedCount: targetUsers.length,
+      },
+    });
+  } catch (error) {
+    console.error("Error bulk updating users:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error bulk updating users",
+      error: error.message,
+    });
+  }
+};
+
+// @desc    Bulk delete users (Admin)
+// @route   DELETE /api/auth/users/bulk-delete
+// @access  Private/Admin
+exports.bulkDeleteUsers = async (req, res) => {
+  try {
+    const { userIds } = req.body;
+
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "userIds must be a non-empty array",
+      });
+    }
+
+    if (userIds.length > 200) {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot delete more than 200 users at once",
+      });
+    }
+
+    if (userIds.some((userId) => isSameUser(userId, req.user._id))) {
+      return res.status(400).json({
+        success: false,
+        message: "You cannot delete your own account",
+      });
+    }
+
+    const targetUsers = await User.find({ _id: { $in: userIds } });
+
+    if (!targetUsers.length) {
+      return res.status(404).json({ success: false, message: "No users found" });
+    }
+
+    if (!hasRole(req.user, ROLES.SystemAdmin) && targetUsers.some((user) => hasRole(user, ROLES.SystemAdmin))) {
+      return res.status(403).json({
+        success: false,
+        message: "Only System Admin can delete System Admin accounts",
+      });
+    }
+
+    await User.deleteMany({ _id: { $in: targetUsers.map((user) => user._id) } });
+
+    await logAction(
+      LOGCONSTANTS.actions.user.DELETE_USER,
+      req.user._id,
+      `Bulk deleted ${targetUsers.length} users`,
+      { targetUserIds: targetUsers.map((user) => user._id) }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: `Deleted ${targetUsers.length} users successfully`,
+      data: {
+        deletedCount: targetUsers.length,
+      },
+    });
+  } catch (error) {
+    console.error("Error bulk deleting users:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error bulk deleting users",
+      error: error.message,
+    });
+  }
+};
+
 // @desc    Admin Reset User Password
 // @route   PUT /api/auth/users/:userId/reset-password
 // @access  Private/Admin
@@ -1321,24 +1590,26 @@ exports.adminResetPassword = async (req, res) => {
       });
     }
 
-    // Validate password if provided, otherwise generate a secure temporary password
-    const { generateSecurePassword, validatePasswordComplexity } = require("../utils/securityUtils");
-    const passwordToSet = newPassword || generateSecurePassword();
-    
-    if (newPassword) {
-      const validation = validatePasswordComplexity(newPassword);
-      if (!validation.valid) {
-        return res.status(400).json({ success: false, message: validation.message });
-      }
+    if (!newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "New password is required",
+      });
+    }
+
+    const { validatePasswordComplexity } = require("../utils/securityUtils");
+    const validation = validatePasswordComplexity(newPassword);
+    if (!validation.valid) {
+      return res.status(400).json({ success: false, message: validation.message });
     }
     
     // Set new password (pre-save hook will hash it)
-    user.password = passwordToSet;
+    user.password = newPassword;
     await user.save();
 
     res.status(200).json({
       success: true,
-      message: `Password reset successfully for ${user.firstName} ${user.lastName}. A temporary password has been set.`,
+      message: `Password reset successfully for ${user.firstName} ${user.lastName}.`,
     });
   } catch (error) {
     console.error("Error resetting user password:", error);

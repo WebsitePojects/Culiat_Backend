@@ -32,6 +32,10 @@ const reportSchema = new mongoose.Schema({
   images: [{
     type: String,
   }],
+  reportVideo: {
+    type: String,
+    default: null,
+  },
   reportedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',

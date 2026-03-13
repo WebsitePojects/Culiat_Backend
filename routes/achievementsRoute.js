@@ -14,9 +14,9 @@ const ROLES = require('../config/roles');
 router.get('/', getAchievements);
 router.get('/:id', getAchievement);
 
-// Support multiple image uploads (up to 6 images)
-router.post('/', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), upload.array('achievementImages', 6), createAchievement);
-router.put('/:id', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), upload.array('achievementImages', 6), updateAchievement);
-router.delete('/:id', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), deleteAchievement);
+// Support multiple image uploads (up to 15 images)
+router.post('/', protect, authorize(ROLES.SystemAdmin, ROLES.SuperAdmin), upload.array('achievementImages', 15), createAchievement);
+router.put('/:id', protect, authorize(ROLES.SystemAdmin, ROLES.SuperAdmin), upload.array('achievementImages', 15), updateAchievement);
+router.delete('/:id', protect, authorize(ROLES.SystemAdmin, ROLES.SuperAdmin), deleteAchievement);
 
 module.exports = router;

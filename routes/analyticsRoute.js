@@ -13,10 +13,11 @@ const {
   getSectoralGroupsStats,
 } = require("../controllers/analyticsController");
 const { protect, authorize } = require("../middleware/auth");
+const ROLES = require("../config/roles");
 
 // All routes require admin authentication
 router.use(protect);
-router.use(authorize(74932, 74933)); // SuperAdmin and Admin only
+router.use(authorize(ROLES.SystemAdmin, ROLES.SuperAdmin));
 
 // Analytics routes
 router.get("/overview", getOverviewStats);

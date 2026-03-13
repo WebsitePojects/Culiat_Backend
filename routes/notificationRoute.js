@@ -5,10 +5,11 @@ const {
   getNotificationCounts,
 } = require("../controllers/notificationController");
 const { protect, authorize } = require("../middleware/auth");
+const ROLES = require("../config/roles");
 
 // All routes require admin authentication
 router.use(protect);
-router.use(authorize(74932, 74933)); // SuperAdmin and Admin only
+router.use(authorize(ROLES.SystemAdmin, ROLES.SuperAdmin, ROLES.Admin));
 
 // Notification routes
 router.get("/recent", getRecentNotifications);

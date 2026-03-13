@@ -3,9 +3,10 @@ const Picture = require("../models/Picture");
 const Settings = require("../models/Settings");
 const ROLES = require("../config/roles");
 const { LOGCONSTANTS } = require("../config/logConstants");
-const { getRoleName } = require("../utils/roleHelpers");
+const { getRoleName, getUserDisplayNameWithWebsiteAdminTag } = require("../utils/roleHelpers");
 const { logAction } = require("../utils/logHelper");
 const { escapeRegex, sanitizeSortField } = require("../utils/securityUtils");
+const { isSameUser } = require("../utils/roleAccess");
 const path = require("path");
 
 // Check if using Cloudinary
@@ -372,12 +373,28 @@ exports.updateDocumentRequest = async (req, res) => {
 exports.updateRequestStatus = async (req, res) => {
   try {
     const { status, businessInfo, fees } = req.body;
+    const allowedStatuses = ["pending", "approved", "rejected", "completed", "cancelled"];
+
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid request status",
+      });
+    }
+
     const request = await DocumentRequest.findById(req.params.id);
 
     if (!request) {
       return res
         .status(404)
         .json({ success: false, message: "Document request not found" });
+    }
+
+    if (isSameUser(request.applicant, req.user?._id)) {
+      return res.status(403).json({
+        success: false,
+        message: "You cannot process your own document request",
+      });
     }
 
     request.status = status;
@@ -402,7 +419,14 @@ exports.updateRequestStatus = async (req, res) => {
 
     // Update fees if provided
     if (fees !== undefined && fees !== null) {
-      request.fees = parseFloat(fees);
+      const parsedFees = parseFloat(fees);
+      if (!Number.isFinite(parsedFees) || parsedFees < 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid fees value",
+        });
+      }
+      request.fees = parsedFees;
     }
 
     await request.save();
@@ -595,7 +619,7 @@ exports.getDocumentHistory = async (req, res) => {
       fees: req.fees || getDocumentPrice(req.documentType),
       processedBy: req.processedBy
         ? {
-            name: `${req.processedBy.firstName} ${req.processedBy.lastName}`,
+            name: getUserDisplayNameWithWebsiteAdminTag(req.processedBy),
           }
         : null,
       processedAt: req.processedAt,
@@ -675,7 +699,7 @@ exports.exportDocumentHistory = async (req, res) => {
       req.paymentStatus || "N/A",
       req.fees || 0,
       req.processedBy
-        ? `${req.processedBy.firstName} ${req.processedBy.lastName}`
+        ? getUserDisplayNameWithWebsiteAdminTag(req.processedBy)
         : "N/A",
       req.createdAt ? new Date(req.createdAt).toLocaleString() : "N/A",
       req.processedAt ? new Date(req.processedAt).toLocaleString() : "N/A",
@@ -757,7 +781,7 @@ exports.exportDocumentPayments = async (req, res) => {
       p.fees || getDocumentPrice(p.documentType),
       p.paymentMethod || "Cash",
       p.processedBy
-        ? `${p.processedBy.firstName} ${p.processedBy.lastName}`
+        ? getUserDisplayNameWithWebsiteAdminTag(p.processedBy)
         : "N/A",
       p.paidAt ? new Date(p.paidAt).toLocaleString() : "N/A",
     ]);
@@ -930,7 +954,7 @@ exports.getDocumentPayments = async (req, res) => {
       },
       receivedBy: p.processedBy
         ? {
-            name: `${p.processedBy.firstName} ${p.processedBy.lastName}`,
+            name: getUserDisplayNameWithWebsiteAdminTag(p.processedBy),
           }
         : null,
       paymentDate: p.paidAt || p.processedAt,

@@ -15,7 +15,7 @@ const {
 const { protect, authorize } = require('../middleware/auth');
 const ROLES = require('../config/roles');
 
-const adminOnly = [protect, authorize(ROLES.SuperAdmin, ROLES.Admin)];
+const adminOnly = [protect, authorize(ROLES.SystemAdmin, ROLES.SuperAdmin)];
 
 // Admin-only routes (secured)
 router.get('/', ...adminOnly, getAllServices);

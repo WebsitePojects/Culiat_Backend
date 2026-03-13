@@ -5,7 +5,8 @@ const path = require("path");
 const fs = require("fs");
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const { cloudinary } = require("../config/cloudinary");
-const { protect, isAdmin } = require("../middleware/auth");
+const { protect, authorize } = require("../middleware/auth");
+const ROLES = require("../config/roles");
 
 const {
   getMyProfile,
@@ -91,29 +92,6 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
 });
 
-// Local isSuperAdmin middleware
-const isSuperAdmin = (req, res, next) => {
-  if (req.user && (req.user.role === 74932 || req.user.roleCode === 74932)) {
-    return next();
-  }
-  return res.status(403).json({
-    success: false,
-    message: "SuperAdmin access required",
-  });
-};
-
-// Middleware to check if user is admin or superadmin
-const isAdminOrSuperAdmin = (req, res, next) => {
-  if (req.user && (req.user.role === 74932 || req.user.role === 74933 || 
-      req.user.roleCode === 74932 || req.user.roleCode === 74933)) {
-    return next();
-  }
-  return res.status(403).json({
-    success: false,
-    message: "Admin access required",
-  });
-};
-
 // ============================================
 // RESIDENT ROUTES
 // ============================================
@@ -148,18 +126,18 @@ router.delete("/cancel/:id", protect, cancelProfileUpdate);
 // ============================================
 
 // Get all profile update requests
-router.get("/admin/all", protect, isAdminOrSuperAdmin, getAllProfileUpdates);
+router.get("/admin/all", protect, authorize(ROLES.SuperAdmin, ROLES.Admin), getAllProfileUpdates);
 
 // Get single profile update detail
-router.get("/admin/:id", protect, isAdminOrSuperAdmin, getProfileUpdateDetail);
+router.get("/admin/:id", protect, authorize(ROLES.SuperAdmin, ROLES.Admin), getProfileUpdateDetail);
 
 // Approve profile update
-router.put("/admin/:id/approve", protect, isAdminOrSuperAdmin, approveProfileUpdate);
+router.put("/admin/:id/approve", protect, authorize(ROLES.SuperAdmin, ROLES.Admin), approveProfileUpdate);
 
 // Reject profile update
-router.put("/admin/:id/reject", protect, isAdminOrSuperAdmin, rejectProfileUpdate);
+router.put("/admin/:id/reject", protect, authorize(ROLES.SuperAdmin, ROLES.Admin), rejectProfileUpdate);
 
 // Get user's complete profile with history
-router.get("/admin/user/:userId", protect, isAdminOrSuperAdmin, getUserProfileWithHistory);
+router.get("/admin/user/:userId", protect, authorize(ROLES.SuperAdmin, ROLES.Admin), getUserProfileWithHistory);
 
 module.exports = router;

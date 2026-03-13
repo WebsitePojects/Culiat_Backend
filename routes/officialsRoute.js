@@ -25,11 +25,11 @@ router.get('/personnel', getPersonnel);
 router.get('/:id', getOfficial);
 
 // Admin routes - with file upload support
-router.post('/', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), upload.single('officialPhoto'), createOfficial);
-router.put('/reorder', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), reorderOfficials);
-router.put('/:id', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), upload.single('officialPhoto'), updateOfficial);
-router.put('/:id/toggle-active', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), toggleActive);
-router.delete('/:id', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), deleteOfficial);
-router.get('/stats/all', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), getOfficialsStats);
+router.post('/', protect, authorize(ROLES.SystemAdmin, ROLES.SuperAdmin), upload.single('officialPhoto'), createOfficial);
+router.put('/reorder', protect, authorize(ROLES.SystemAdmin, ROLES.SuperAdmin), reorderOfficials);
+router.put('/:id', protect, authorize(ROLES.SystemAdmin, ROLES.SuperAdmin), upload.single('officialPhoto'), updateOfficial);
+router.put('/:id/toggle-active', protect, authorize(ROLES.SystemAdmin, ROLES.SuperAdmin), toggleActive);
+router.delete('/:id', protect, authorize(ROLES.SystemAdmin, ROLES.SuperAdmin), deleteOfficial);
+router.get('/stats/all', protect, authorize(ROLES.SystemAdmin, ROLES.SuperAdmin), getOfficialsStats);
 
 module.exports = router;

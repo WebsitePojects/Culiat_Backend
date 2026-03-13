@@ -7,6 +7,16 @@ const {
 } = require("../utils/emailService");
 const { LOGCONSTANTS } = require("../config/logConstants");
 const { logAction } = require("../utils/logHelper");
+const { getUserDisplayNameWithWebsiteAdminTag } = require("../utils/roleHelpers");
+const ROLES = require("../config/roles");
+const { hasRole, isSameUser } = require("../utils/roleAccess");
+
+const attachReviewedByDisplayName = (record) => {
+  const data = record?.toObject ? record.toObject() : record;
+  if (!data) return data;
+  data.reviewedByDisplayName = getUserDisplayNameWithWebsiteAdminTag(data.reviewedBy);
+  return data;
+};
 
 // Check if using Cloudinary
 const isCloudinaryEnabled = () => {
@@ -41,7 +51,7 @@ exports.getPsaCompletionStatus = async (req, res) => {
     }
 
     // Only for residents
-    if (user.role !== 74934) {
+    if (!hasRole(user, ROLES.Resident)) {
       return res.status(200).json({
         success: true,
         data: {
@@ -102,7 +112,7 @@ exports.submitPsaVerification = async (req, res) => {
     }
 
     // Only for residents
-    if (user.role !== 74934) {
+    if (!hasRole(user, ROLES.Resident)) {
       return res.status(403).json({
         success: false,
         message: "PSA verification is only for residents",
@@ -360,7 +370,7 @@ exports.getVerificationById = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: verification,
+      data: attachReviewedByDisplayName(verification),
     });
   } catch (error) {
     console.error("Error getting verification:", error);
@@ -392,6 +402,13 @@ exports.approveVerification = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "This verification has already been processed",
+      });
+    }
+
+    if (isSameUser(verification.user, req.user._id)) {
+      return res.status(403).json({
+        success: false,
+        message: "You cannot approve your own verification request",
       });
     }
 
@@ -480,6 +497,13 @@ exports.rejectVerification = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "This verification has already been processed",
+      });
+    }
+
+    if (isSameUser(verification.user, req.user._id)) {
+      return res.status(403).json({
+        success: false,
+        message: "You cannot reject your own verification request",
       });
     }
 
@@ -577,11 +601,13 @@ exports.getVerificationHistory = async (req, res) => {
       .skip((page - 1) * limit)
       .limit(parseInt(limit));
 
+    const transformedVerifications = verifications.map(attachReviewedByDisplayName);
+
     const total = await ProfileVerification.countDocuments(query);
 
     res.status(200).json({
       success: true,
-      data: verifications,
+      data: transformedVerifications,
       pagination: {
         currentPage: parseInt(page),
         totalPages: Math.ceil(total / limit),

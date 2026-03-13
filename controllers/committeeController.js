@@ -1,5 +1,6 @@
 const Committee = require('../models/Committee');
 const Announcement = require('../models/Announcement');
+const Achievement = require('../models/Achievement');
 const Logs = require('../models/Logs');
 
 // @desc    Get all active committees (public)
@@ -162,7 +163,7 @@ const deleteCommittee = async (req, res) => {
   }
 };
 
-// @desc    Get accomplishments for a committee (from linked announcements)
+// @desc    Get accomplishments for a committee (from linked announcements and achievements)
 // @route   GET /api/committees/:id/accomplishments
 // @access  Public
 const getCommitteeAccomplishments = async (req, res) => {
@@ -184,10 +185,39 @@ const getCommitteeAccomplishments = async (req, res) => {
       .select('title content images image category eventDate createdAt slug youtubeVideoUrl youtubeVideoId')
       .sort({ createdAt: -1 });
 
+    // Get achievements linked to this committee
+    const achievements = await Achievement.find({
+      committeeRef: req.params.id,
+    })
+      .select('title description images image category date createdAt hashtags')
+      .sort({ date: -1, createdAt: -1 });
+
+    const normalizedAnnouncements = announcements.map((item) => ({
+      ...item.toObject(),
+      accomplishmentType: 'announcement',
+      contentType: 'announcement',
+      detailPath: `/announcements/${item.slug || item._id}`,
+      publishedAt: item.eventDate || item.createdAt,
+    }));
+
+    const normalizedAchievements = achievements.map((item) => ({
+      ...item.toObject(),
+      accomplishmentType: 'achievement',
+      contentType: 'achievement',
+      content: item.description || '',
+      eventDate: item.date || item.createdAt,
+      detailPath: `/achievements/${item._id}`,
+      publishedAt: item.date || item.createdAt,
+    }));
+
+    const accomplishments = [...normalizedAnnouncements, ...normalizedAchievements].sort(
+      (a, b) => new Date(b.publishedAt) - new Date(a.publishedAt)
+    );
+
     res.status(200).json({
       success: true,
-      count: announcements.length,
-      data: announcements,
+      count: accomplishments.length,
+      data: accomplishments,
     });
   } catch (error) {
     res.status(500).json({

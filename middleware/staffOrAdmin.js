@@ -1,8 +1,7 @@
 const ROLES = require('../config/roles');
 
 /**
- * Middleware to restrict access to Staff, Admin, or SuperAdmin roles
- * Note: Currently only Admin and SuperAdmin exist in the system
+ * Middleware to restrict access to Staff, Admin, SuperAdmin, or SystemAdmin roles
  */
 const staffOrAdmin = (req, res, next) => {
   if (!req.user) {
@@ -13,10 +12,10 @@ const staffOrAdmin = (req, res, next) => {
   }
 
   // Check if user has admin privileges
-  // Currently the system has: SuperAdmin (74932), Admin (74933), Resident (74934)
-  const authorizedRoles = [ROLES.SuperAdmin, ROLES.Admin];
-  
-  if (!authorizedRoles.includes(req.user.role)) {
+  const authorizedRoles = [ROLES.SystemAdmin, ROLES.SuperAdmin, ROLES.Admin];
+  const userRole = Number(req.user.roleCode || req.user.role);
+
+  if (!authorizedRoles.includes(userRole)) {
     return res.status(403).json({
       success: false,
       message: 'Access denied. Staff or Admin privileges required.',

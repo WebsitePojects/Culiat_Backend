@@ -14,13 +14,14 @@ const {
 } = require("../controllers/profileVerificationController");
 const { protect, isAdmin } = require("../middleware/auth");
 const ROLES = require("../config/roles");
+const { hasRole } = require("../utils/roleAccess");
 
-// Middleware to check if user is SuperAdmin
+// Middleware to check if user is SystemAdmin
 const isSuperAdmin = (req, res, next) => {
-  if (!req.user || req.user.role !== ROLES.SuperAdmin) {
+  if (!req.user || !hasRole(req.user, ROLES.SystemAdmin)) {
     return res.status(403).json({
       success: false,
-      message: "Access denied. SuperAdmin privileges required.",
+      message: "Access denied. SystemAdmin privileges required.",
     });
   }
   next();

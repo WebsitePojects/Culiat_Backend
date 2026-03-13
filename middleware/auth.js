@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const ROLES = require("../config/roles");
+const { hasRole } = require("../utils/roleAccess");
 
 // Protect routes - verify JWT token
 exports.protect = async (req, res, next) => {
@@ -43,24 +44,14 @@ exports.protect = async (req, res, next) => {
 // Role-based authorization
 exports.authorize = (...roles) => {
   return (req, res, next) => {
-    // Get user's role (could be role code or role name)
-    const userRole = req.user.role;
-    const userRoleName = req.user.roleName;
-    
-    // Check if user's role matches any of the allowed roles
-    // Support both role codes (74932, 74933, 74934) and role names ('Admin', 'SuperAdmin', 'Resident')
-    const isAuthorized = roles.some(role => {
-      // If role is a string name, check against both roleName and ROLES mapping
-      if (typeof role === 'string') {
-        // Check if roleName matches
-        if (userRoleName === role) return true;
-        // Check if role code matches the ROLES mapping
-        if (ROLES[role] && userRole === ROLES[role]) return true;
-      }
-      // If role is a number (role code), check directly
-      if (typeof role === 'number' && userRole === role) return true;
-      return false;
-    });
+    const normalizedAllowedRoles = roles
+      .map((role) => {
+        if (typeof role === "string") return ROLES[role];
+        return Number(role);
+      })
+      .filter((role) => Object.values(ROLES).includes(role));
+
+    const isAuthorized = hasRole(req.user, normalizedAllowedRoles);
     
     if (!isAuthorized) {
       return res.status(403).json({
@@ -72,7 +63,7 @@ exports.authorize = (...roles) => {
   };
 };
 
-// Check if user is Admin or SuperAdmin
+// Check if user is Admin, SuperAdmin, or SystemAdmin
 exports.isAdmin = async (req, res, next) => {
   try {
     if (!req.user) {
@@ -82,8 +73,7 @@ exports.isAdmin = async (req, res, next) => {
       });
     }
 
-    // Check if user role is Admin (74933) or SuperAdmin (74932)
-    if (req.user.role !== ROLES.Admin && req.user.role !== ROLES.SuperAdmin) {
+    if (!hasRole(req.user, ROLES.Admin, ROLES.SuperAdmin, ROLES.SystemAdmin)) {
       return res.status(403).json({
         success: false,
         message: "Access denied. Admin privileges required.",

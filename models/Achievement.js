@@ -27,6 +27,11 @@ const AchievementSchema = new mongoose.Schema({
   images: [{
     type: String
   }],
+  committeeRef: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Committee',
+    default: null,
+  },
   // Hashtags for the achievement (optional)
   hashtags: [{
     type: String,

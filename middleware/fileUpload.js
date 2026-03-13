@@ -49,6 +49,7 @@ const getFolderForField = (fieldname) => {
     case 'proofOfResidency':
       return 'proofs';
     case 'achievementImage':
+    case 'achievementImages':
       return 'achievements';
     case 'birthCertificateDoc':
       return 'documents';
@@ -58,9 +59,11 @@ const getFolderForField = (fieldname) => {
     case 'coverPhoto':
       return 'barangay';
     case 'reportImages':
+    case 'reportVideo':
       return 'reports';
     case 'announcementImage':
     case 'image':
+    case 'images':
       return 'announcements';
     default:
       return 'proofs';
@@ -75,13 +78,18 @@ const cloudinaryStorage = new CloudinaryStorage({
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     const field = file.fieldname || 'file';
     
-    // Handle PDF files differently - don't force format conversion
+    // Handle PDF and video files differently - don't force image conversion
     const isPDF = file.mimetype === 'application/pdf' || path.extname(file.originalname).toLowerCase() === '.pdf';
+    const isVideo = file.fieldname === 'reportVideo' || file.mimetype.startsWith('video/');
     
     return {
       folder: `culiat-barangay/${folder}`,
-      // Don't set format for PDFs, let Cloudinary handle it
-      ...(isPDF ? { resource_type: 'raw' } : { format: 'jpg', transformation: [{ quality: 'auto' }] }),
+      // Don't set image format for PDFs/videos, let Cloudinary handle original media type
+      ...(isPDF
+        ? { resource_type: 'raw' }
+        : isVideo
+          ? { resource_type: 'video' }
+          : { format: 'jpg', transformation: [{ quality: 'auto' }] }),
       public_id: `${field}-${uniqueSuffix}`
     };
   }
@@ -104,6 +112,19 @@ const diskStorage = multer.diskStorage({
 
 // File filter to accept images and PDFs (for birth certificate documents)
 const fileFilter = (req, file, cb) => {
+  if (file.fieldname === 'reportVideo') {
+    const allowedVideoMimeTypes = ['video/mp4', 'video/webm', 'video/quicktime'];
+    const allowedVideoExt = /mp4|webm|mov/;
+    const extname = allowedVideoExt.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedVideoMimeTypes.includes(file.mimetype);
+
+    if (mimetype && extname) {
+      return cb(null, true);
+    }
+
+    return cb(new Error('Only MP4, WEBM, and MOV video files are allowed'));
+  }
+
   // Allow PDFs only for birth certificate documents
   if (file.fieldname === 'birthCertificateDoc') {
     const allowedTypes = /jpeg|jpg|png|pdf/;
@@ -149,7 +170,7 @@ if (isCloudinaryConfigured()) {
 const upload = multer({
   storage: storage,
   limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB
+    fileSize: 25 * 1024 * 1024 // 25MB
   },
   fileFilter: fileFilter
 });

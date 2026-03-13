@@ -1,8 +1,15 @@
 const Announcement = require('../models/Announcement');
 const { LOGCONSTANTS } = require('../config/logConstants');
-const { getRoleName } = require('../utils/roleHelpers');
+const { getRoleName, getUserDisplayNameWithWebsiteAdminTag } = require('../utils/roleHelpers');
 const { logAction } = require('../utils/logHelper');
 const { deleteFromCloudinary, getPublicIdFromUrl } = require('../config/cloudinary');
+
+const addPublisherDisplayName = (announcement) => {
+  const obj = announcement?.toObject ? announcement.toObject() : announcement;
+  if (!obj) return obj;
+  obj.publishedByDisplayName = getUserDisplayNameWithWebsiteAdminTag(obj.publishedBy);
+  return obj;
+};
 
 // Helper function to extract YouTube video ID from URL
 const extractYouTubeVideoId = (url) => {
@@ -38,7 +45,7 @@ exports.createAnnouncement = async (req, res) => {
   try {
     const { title, content, category, priority, publishDate, expiryDate, location, eventDate, status, hashtags, youtubeVideoUrl, committeeRef } = req.body;
     
-    // Handle multiple image uploads (up to 6)
+    // Handle multiple image uploads (up to 15)
     const images = [];
     if (req.files && req.files.length > 0) {
       req.files.forEach(file => {
@@ -129,13 +136,15 @@ exports.getAllAnnouncements = async (req, res) => {
     }
 
     const announcements = await Announcement.find(query)
-      .populate('publishedBy', 'firstName lastName')
+      .populate('publishedBy', 'firstName lastName role roles')
       .sort({ createdAt: -1 });
+
+    const enrichedAnnouncements = announcements.map(addPublisherDisplayName);
 
     res.status(200).json({
       success: true,
-      count: announcements.length,
-      data: announcements,
+      count: enrichedAnnouncements.length,
+      data: enrichedAnnouncements,
     });
   } catch (error) {
     res.status(500).json({
@@ -164,13 +173,15 @@ exports.getPublishedAnnouncements = async (req, res) => {
         { expiryDate: { $gte: now } }
       ]
     })
-      .populate('publishedBy', 'firstName lastName')
+      .populate('publishedBy', 'firstName lastName role roles')
       .sort({ priority: -1, createdAt: -1 });
+
+    const enrichedAnnouncements = announcements.map(addPublisherDisplayName);
 
     res.status(200).json({
       success: true,
-      count: announcements.length,
-      data: announcements,
+      count: enrichedAnnouncements.length,
+      data: enrichedAnnouncements,
     });
   } catch (error) {
     res.status(500).json({
@@ -192,12 +203,12 @@ exports.getAnnouncement = async (req, res) => {
     let announcement;
     if (isObjectId) {
       announcement = await Announcement.findById(req.params.id)
-        .populate('publishedBy', 'firstName lastName email')
+        .populate('publishedBy', 'firstName lastName email role roles')
         .populate('committeeRef', 'name slug');
     } else {
       // Find by slug
       announcement = await Announcement.findOne({ slug: req.params.id })
-        .populate('publishedBy', 'firstName lastName email')
+        .populate('publishedBy', 'firstName lastName email role roles')
         .populate('committeeRef', 'name slug');
     }
 
@@ -231,7 +242,7 @@ exports.getAnnouncement = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: announcement,
+      data: addPublisherDisplayName(announcement),
     });
   } catch (error) {
     res.status(500).json({
@@ -293,7 +304,7 @@ exports.updateAnnouncement = async (req, res) => {
     if (req.files && req.files.length > 0) {
       req.files.forEach(file => {
         const imageUrl = getImageUrl(file);
-        if (imageUrl && images.length < 6) {
+        if (imageUrl && images.length < 15) {
           images.push(imageUrl);
         }
       });
@@ -302,7 +313,7 @@ exports.updateAnnouncement = async (req, res) => {
     // Also handle single image upload for backward compatibility
     if (req.file) {
       const imageUrl = getImageUrl(req.file);
-      if (imageUrl && images.length < 6) {
+      if (imageUrl && images.length < 15) {
         images.push(imageUrl);
       }
     }

@@ -20,19 +20,19 @@ const { protect, authorize } = require("../middleware/auth");
 const upload = multer({ storage: storages.barangay });
 
 // Admin routes (protected) - MUST come before /:id routes
-router.get("/admin/all", protect, authorize("Admin", "SuperAdmin"), getAdminBanners);
-router.put("/reorder", protect, authorize("Admin", "SuperAdmin"), reorderBanners);
-router.post("/upload", protect, authorize("Admin", "SuperAdmin"), upload.single("file"), uploadBannerFile);
-router.delete("/upload/temp", protect, authorize("Admin", "SuperAdmin"), deleteTempUpload);
+router.get("/admin/all", protect, authorize("SystemAdmin", "SuperAdmin"), getAdminBanners);
+router.put("/reorder", protect, authorize("SystemAdmin", "SuperAdmin"), reorderBanners);
+router.post("/upload", protect, authorize("SystemAdmin", "SuperAdmin"), upload.single("file"), uploadBannerFile);
+router.delete("/upload/temp", protect, authorize("SystemAdmin", "SuperAdmin"), deleteTempUpload);
 
 // Public routes
 router.get("/", getBanners);
 router.get("/:id", getBanner);
 
 // Protected routes with :id parameter
-router.post("/", protect, authorize("Admin", "SuperAdmin"), createBanner);
-router.put("/:id", protect, authorize("Admin", "SuperAdmin"), updateBanner);
-router.patch("/:id/toggle", protect, authorize("Admin", "SuperAdmin"), toggleBannerStatus);
-router.delete("/:id", protect, authorize("Admin", "SuperAdmin"), deleteBanner);
+router.post("/", protect, authorize("SystemAdmin", "SuperAdmin"), createBanner);
+router.put("/:id", protect, authorize("SystemAdmin", "SuperAdmin"), updateBanner);
+router.patch("/:id/toggle", protect, authorize("SystemAdmin", "SuperAdmin"), toggleBannerStatus);
+router.delete("/:id", protect, authorize("SystemAdmin", "SuperAdmin"), deleteBanner);
 
 module.exports = router;

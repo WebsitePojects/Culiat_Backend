@@ -20,6 +20,20 @@ const getImageUrl = (file) => {
   return isCloudinaryEnabled() ? file.path : file.filename;
 };
 
+const getUploadedFiles = (req, fieldName) => {
+  if (!req?.files) return [];
+
+  if (Array.isArray(req.files)) {
+    return fieldName === 'reportImages' ? req.files : [];
+  }
+
+  if (Array.isArray(req.files[fieldName])) {
+    return req.files[fieldName];
+  }
+
+  return [];
+};
+
 // @desc    Create a new report
 // @route   POST /api/reports
 // @access  Private (Resident/Admin)
@@ -38,12 +52,17 @@ exports.createReport = async (req, res) => {
 
     // Handle image uploads
     const images = [];
-    if (req.files && req.files.length > 0) {
-      req.files.forEach(file => {
+    const uploadedImages = getUploadedFiles(req, 'reportImages');
+    if (uploadedImages.length > 0) {
+      uploadedImages.forEach(file => {
         const imageUrl = getImageUrl(file);
         if (imageUrl) images.push(imageUrl);
       });
     }
+
+    // Handle optional video upload
+    const uploadedVideos = getUploadedFiles(req, 'reportVideo');
+    const reportVideo = uploadedVideos.length > 0 ? getImageUrl(uploadedVideos[0]) : null;
 
     const report = await Report.create({
       title,
@@ -52,6 +71,7 @@ exports.createReport = async (req, res) => {
       location,
       priority,
       images,
+      reportVideo,
       reportedBy: req.user?._id,
       isAnonymous: false,
     });
@@ -94,12 +114,17 @@ exports.createAnonymousReport = async (req, res) => {
 
     // Handle image uploads
     const images = [];
-    if (req.files && req.files.length > 0) {
-      req.files.forEach(file => {
+    const uploadedImages = getUploadedFiles(req, 'reportImages');
+    if (uploadedImages.length > 0) {
+      uploadedImages.forEach(file => {
         const imageUrl = getImageUrl(file);
         if (imageUrl) images.push(imageUrl);
       });
     }
+
+    // Handle optional video upload
+    const uploadedVideos = getUploadedFiles(req, 'reportVideo');
+    const reportVideo = uploadedVideos.length > 0 ? getImageUrl(uploadedVideos[0]) : null;
 
     const report = await Report.create({
       title,
@@ -108,6 +133,7 @@ exports.createAnonymousReport = async (req, res) => {
       location,
       priority,
       images,
+      reportVideo,
       isAnonymous: true,
       anonymousContact: anonymousContact || null,
     });

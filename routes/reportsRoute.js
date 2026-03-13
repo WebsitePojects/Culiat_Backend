@@ -14,13 +14,16 @@ const { protect, authorize } = require('../middleware/auth');
 const ROLES = require('../config/roles');
 const { upload } = require('../middleware/fileUpload');
 
-// Upload middleware for report images (max 5 images)
-const reportImageUpload = upload.array('reportImages', 5);
+// Upload middleware for report media (max 5 images + 1 video)
+const reportMediaUpload = upload.fields([
+  { name: 'reportImages', maxCount: 5 },
+  { name: 'reportVideo', maxCount: 1 },
+]);
 
 // Anonymous report route - NO authentication required
-router.post('/anonymous', reportImageUpload, createAnonymousReport);
+router.post('/anonymous', reportMediaUpload, createAnonymousReport);
 
-router.post('/', protect, reportImageUpload, createReport); // Protected - authenticated users can report
+router.post('/', protect, reportMediaUpload, createReport); // Protected - authenticated users can report
 router.get('/', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), getAllReports);
 router.get('/my-reports', protect, getMyReports);
 router.get('/:id', protect, getReport); // Protected - authenticated users can view

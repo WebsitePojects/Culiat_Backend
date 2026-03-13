@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
+const { normalizeRoleCodes, getPrimaryRole } = require("../utils/roleAccess");
 
 const userSchema = new mongoose.Schema(
   {
@@ -42,7 +43,18 @@ const userSchema = new mongoose.Schema(
     role: {
       type: Number,
       default: 74934, // Default to Resident
-      enum: [74932, 74933, 74934], // Valid role codes (SuperAdmin, Admin, Resident)
+      enum: [74931, 74932, 74933, 74934], // Valid role codes (SystemAdmin, SuperAdmin, Admin, Resident)
+    },
+    roles: {
+      type: [Number],
+      default: [74934],
+      enum: [74931, 74932, 74933, 74934], // Valid role codes (SystemAdmin, SuperAdmin, Admin, Resident)
+      validate: {
+        validator: function (roleList) {
+          return normalizeRoleCodes(roleList).length > 0;
+        },
+        message: "At least one valid role is required",
+      },
     },
     // Resident Type - determines if user is a Barangay Culiat resident or non-resident
     residentType: {
@@ -728,6 +740,14 @@ const userSchema = new mongoose.Schema(
 
 // Hash password before saving
 userSchema.pre("save", async function (next) {
+  const normalizedRoles = normalizeRoleCodes([
+    ...(Array.isArray(this.roles) ? this.roles : []),
+    this.role,
+  ]);
+
+  this.roles = normalizedRoles.length ? normalizedRoles : [74934];
+  this.role = getPrimaryRole(this.roles);
+
   if (!this.isModified("password")) {
     return next();
   }

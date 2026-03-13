@@ -45,7 +45,7 @@ const announcementSchema = new mongoose.Schema({
     type: String,
     default: 'Barangay Culiat',
   },
-  // Support for multiple images (up to 6)
+  // Support for multiple images (up to 15)
   images: [{
     type: String,
   }],

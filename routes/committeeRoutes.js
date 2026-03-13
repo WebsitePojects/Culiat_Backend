@@ -17,8 +17,8 @@ router.get('/:slug', getCommitteeBySlug);
 router.get('/:id/accomplishments', getCommitteeAccomplishments);
 
 // Protected routes (Admin/SuperAdmin only)
-router.post('/', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), createCommittee);
-router.put('/:id', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), updateCommittee);
-router.delete('/:id', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), deleteCommittee);
+router.post('/', protect, authorize(ROLES.SystemAdmin, ROLES.SuperAdmin), createCommittee);
+router.put('/:id', protect, authorize(ROLES.SystemAdmin, ROLES.SuperAdmin), updateCommittee);
+router.delete('/:id', protect, authorize(ROLES.SystemAdmin, ROLES.SuperAdmin), deleteCommittee);
 
 module.exports = router;
