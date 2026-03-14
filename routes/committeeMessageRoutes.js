@@ -18,7 +18,7 @@ router.post('/', submitMessage);
 
 // Protected routes (Admin only)
 router.use(protect);
-router.use(authorize('SuperAdmin', 'Admin'));
+router.use(authorize('SystemAdmin', 'SuperAdmin', 'Admin'));
 
 router.get('/', getMessages);
 router.get('/stats', getMessageStats);

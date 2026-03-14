@@ -88,3 +88,30 @@ exports.isAdmin = async (req, res, next) => {
     });
   }
 };
+
+// Restrict resident-only access until registration is approved
+exports.requireApprovedRegistration = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: "Not authorized",
+    });
+  }
+
+  if (hasRole(req.user, ROLES.Resident) && req.user.registrationStatus !== "approved") {
+    const status = req.user.registrationStatus || "pending";
+    const baseMessage =
+      status === "rejected"
+        ? "Your registration is rejected. Document request services are unavailable."
+        : "Your registration is pending verification. Document request services are locked until admin approval.";
+
+    return res.status(403).json({
+      success: false,
+      code: "REGISTRATION_NOT_APPROVED",
+      registrationStatus: status,
+      message: baseMessage,
+    });
+  }
+
+  return next();
+};

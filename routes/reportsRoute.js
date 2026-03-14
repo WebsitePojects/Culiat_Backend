@@ -24,11 +24,11 @@ const reportMediaUpload = upload.fields([
 router.post('/anonymous', reportMediaUpload, createAnonymousReport);
 
 router.post('/', protect, reportMediaUpload, createReport); // Protected - authenticated users can report
-router.get('/', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), getAllReports);
+router.get('/', protect, authorize(ROLES.SystemAdmin, ROLES.SuperAdmin, ROLES.Admin), getAllReports);
 router.get('/my-reports', protect, getMyReports);
 router.get('/:id', protect, getReport); // Protected - authenticated users can view
-router.put('/:id/status', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), updateReportStatus);
+router.put('/:id/status', protect, authorize(ROLES.SystemAdmin, ROLES.SuperAdmin, ROLES.Admin), updateReportStatus);
 router.post('/:id/comments', protect, addComment);
-router.delete('/:id', protect, authorize(ROLES.SuperAdmin, ROLES.Admin), deleteReport);
+router.delete('/:id', protect, authorize(ROLES.SystemAdmin, ROLES.SuperAdmin, ROLES.Admin), deleteReport);
 
 module.exports = router;

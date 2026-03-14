@@ -32,6 +32,15 @@ const setNestedValue = (obj, path, value) => {
   target[lastKey] = value;
 };
 
+const enforceResidentDistrict = (residentType, address) => {
+  if (residentType === 'non_resident') return address;
+  if (!address || typeof address !== 'object' || Array.isArray(address)) return address;
+  return {
+    ...address,
+    district: 'District 6',
+  };
+};
+
 /**
  * Helper function to compare two values and detect changes
  */
@@ -212,6 +221,10 @@ exports.submitProfileUpdate = async (req, res) => {
         success: false,
         message: "User not found",
       });
+    }
+
+    if ((updateType === 'address' || updateType === 'full_profile') && updateData?.address) {
+      updateData.address = enforceResidentDistrict(user.residentType, updateData.address);
     }
     
     // Check for pending update of same type
@@ -721,6 +734,8 @@ exports.approveProfileUpdate = async (req, res) => {
         }
       }
     }
+
+    user.address = enforceResidentDistrict(user.residentType, user.address);
     
     await user.save();
     

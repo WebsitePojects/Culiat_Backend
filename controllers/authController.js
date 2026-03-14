@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
+const { OAuth2Client } = require("google-auth-library");
 const User = require("../models/User");
 const Settings = require("../models/Settings");
 const ROLES = require("../config/roles");
@@ -54,6 +55,54 @@ const parseRolesFromPayload = (payload, fallback = [ROLES.Resident]) => {
       : fallback;
 
   return normalizeRoleCodes(requested);
+};
+
+const enforceResidentDistrict = (residentType, address) => {
+  if (residentType === "non_resident") return address;
+  if (!address || typeof address !== "object" || Array.isArray(address)) return address;
+  return {
+    ...address,
+    district: "District 6",
+  };
+};
+
+const buildGoogleClient = () => {
+  if (!process.env.GOOGLE_CLIENT_ID) return null;
+  return new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+};
+
+const generateUniqueUsername = async (baseSeed = "resident") => {
+  const normalizedBase = String(baseSeed)
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]/g, "")
+    .slice(0, 18) || "resident";
+
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const suffix = Math.floor(1000 + Math.random() * 9000);
+    const candidate = `${normalizedBase}${suffix}`;
+    const exists = await User.findOne({ username: candidate }).select("_id");
+    if (!exists) return candidate;
+  }
+
+  return `${normalizedBase}${Date.now().toString().slice(-6)}`;
+};
+
+const getEffectiveResidentType = (user) => {
+  if (!user) return "unknown";
+  if (hasRole(user, ROLES.Resident) && user.registrationStatus !== "approved") {
+    return "unknown";
+  }
+  return user.residentType || "unknown";
+};
+
+const parseJsonField = (value, fallback = null) => {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (typeof value === "object") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
 };
 
 // @desc    Register a new user
@@ -501,10 +550,15 @@ exports.login = async (req, res) => {
     }
 
     if (user.isActive === false) {
-      return res.status(401).json({
-        success: false,
-        message: "Account is deactivated. Please contact administrator.",
-      });
+      if (hasRole(user, ROLES.Resident) && user.registrationStatus === "rejected") {
+        user.isActive = true;
+        await user.save();
+      } else {
+        return res.status(401).json({
+          success: false,
+          message: "Account is deactivated. Please contact administrator.",
+        });
+      }
     }
 
     // Check if account is locked due to PSA completion deadline
@@ -538,24 +592,6 @@ exports.login = async (req, res) => {
           deadline: deadline,
         });
       }
-    }
-
-    // Check if resident registration is approved
-    if (hasRole(user, ROLES.Resident) && user.registrationStatus === "pending") {
-      return res.status(403).json({
-        success: false,
-        message:
-          "Your registration is pending admin approval. Please wait for approval before logging in.",
-      });
-    }
-
-    if (hasRole(user, ROLES.Resident) && user.registrationStatus === "rejected") {
-      return res.status(403).json({
-        success: false,
-        message: `Your registration was rejected. Reason: ${
-          user.rejectionReason || "Please contact admin for more information."
-        }`,
-      });
     }
 
     // Check password
@@ -620,6 +656,9 @@ exports.login = async (req, res) => {
         roleCode: user.role,
         roles: getUserRoleCodes(user),
         roleNames: getUserRoleNames(user),
+        residentType: getEffectiveResidentType(user),
+        registrationStatus: user.registrationStatus,
+        rejectionReason: user.rejectionReason,
         token,
       },
     });
@@ -654,7 +693,9 @@ exports.getMe = async (req, res) => {
         roleCode: user.role,
         roles: getUserRoleCodes(user),
         roleNames: getUserRoleNames(user),
+        residentType: getEffectiveResidentType(user),
         address: user.address,
+        nonResidentAddress: user.nonResidentAddress,
         phoneNumber: user.phoneNumber,
         dateOfBirth: user.dateOfBirth,
         age: user.age, // Virtual field
@@ -677,6 +718,8 @@ exports.getMe = async (req, res) => {
         backOfValidID: user.backOfValidID,
         photo1x1: user.photo1x1,
         isActive: user.isActive,
+        registrationStatus: user.registrationStatus,
+        rejectionReason: user.rejectionReason,
         createdAt: user.createdAt,
         // PSA Profile completion status (for residents)
         psaCompletion: hasRole(user, ROLES.Resident) ? {
@@ -699,18 +742,138 @@ exports.getMe = async (req, res) => {
   }
 };
 
+// @desc    Login/Register user with Google ID token
+// @route   POST /api/auth/google-login
+// @access  Public
+exports.googleLogin = async (req, res) => {
+  try {
+    const { idToken } = req.body || {};
+
+    if (!idToken) {
+      return res.status(400).json({
+        success: false,
+        message: "Google ID token is required",
+      });
+    }
+
+    const googleClient = buildGoogleClient();
+    if (!googleClient) {
+      return res.status(500).json({
+        success: false,
+        message: "Google login is not configured on the server",
+      });
+    }
+
+    const ticket = await googleClient.verifyIdToken({
+      idToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    const email = payload?.email ? String(payload.email).toLowerCase().trim() : null;
+
+    if (!email || payload?.email_verified !== true) {
+      return res.status(401).json({
+        success: false,
+        message: "Google account email is not verified",
+      });
+    }
+
+    let user = await User.findOne({ email });
+    let isNewUser = false;
+
+    if (!user) {
+      const firstName = payload?.given_name || "Google";
+      const lastName = payload?.family_name || "User";
+      const usernameSeed = payload?.email ? String(payload.email).split("@")[0] : "resident";
+      const generatedUsername = await generateUniqueUsername(usernameSeed);
+      const generatedPassword = crypto.randomBytes(24).toString("hex");
+
+      user = await User.create({
+        firstName,
+        lastName,
+        username: generatedUsername,
+        email,
+        password: generatedPassword,
+        role: ROLES.Resident,
+        roles: [ROLES.Resident],
+        registrationStatus: "pending",
+      });
+
+      isNewUser = true;
+    }
+
+    if (user.isActive === false) {
+      if (hasRole(user, ROLES.Resident) && user.registrationStatus === "rejected") {
+        user.isActive = true;
+        await user.save();
+      } else {
+        return res.status(401).json({
+          success: false,
+          message: "Account is deactivated. Please contact administrator.",
+        });
+      }
+    }
+
+    const token = generateToken(user._id);
+
+    return res.status(200).json({
+      success: true,
+      message: isNewUser
+        ? "Google account registered successfully. Your account is pending admin verification."
+        : "Google login successful",
+      data: {
+        _id: user._id,
+        username: user.username,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        role: getRoleName(user.role),
+        roleCode: user.role,
+        roles: getUserRoleCodes(user),
+        roleNames: getUserRoleNames(user),
+        residentType: getEffectiveResidentType(user),
+        registrationStatus: user.registrationStatus,
+        rejectionReason: user.rejectionReason,
+        isNewGoogleUser: isNewUser,
+        token,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Google login failed",
+      error: error.message,
+    });
+  }
+};
+
 // @desc    Update user profile
 // @route   PUT /api/auth/profile
 // @access  Private
 exports.updateProfile = async (req, res) => {
   try {
-    const { username, firstName, lastName, address, phoneNumber } = req.body;
+    const { username, firstName, lastName, address, phoneNumber, residentType } = req.body;
 
     const user = await User.findById(req.user._id);
     if (username) user.username = username;
     if (firstName) user.firstName = firstName;
     if (lastName) user.lastName = lastName;
-    if (address) user.address = address;
+    if (residentType) user.residentType = residentType;
+    if (address) {
+      let normalizedAddress = address;
+      if (typeof normalizedAddress === "string") {
+        try {
+          normalizedAddress = JSON.parse(normalizedAddress);
+        } catch (error) {
+          normalizedAddress = address;
+        }
+      }
+      user.address = enforceResidentDistrict(user.residentType, normalizedAddress);
+    }
+    if (user.address) {
+      user.address = enforceResidentDistrict(user.residentType, user.address);
+    }
     if (phoneNumber) user.phoneNumber = phoneNumber;
 
     await user.save();
@@ -1043,7 +1206,7 @@ exports.rejectRegistration = async (req, res) => {
 
     user.registrationStatus = "rejected";
     user.rejectionReason = reason;
-    user.isActive = false;
+    user.isActive = true;
     await user.save();
 
     // Send rejection email (mandatory) - gracefully handle no email
@@ -1081,6 +1244,323 @@ exports.rejectRegistration = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Error rejecting registration",
+      error: error.message,
+    });
+  }
+};
+
+// @desc    Get prefill data for rejected registration re-submission
+// @route   GET /api/auth/reregister/:userId/prefill
+// @access  Private
+exports.getReregistrationPrefill = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const isSelf = String(req.user?._id) === String(userId);
+    const isPrivileged = hasRole(req.user, ROLES.SystemAdmin, ROLES.SuperAdmin, ROLES.Admin);
+
+    if (!isSelf && !isPrivileged) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to access this registration data",
+      });
+    }
+
+    const user = await User.findById(userId).select("-password");
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    if (user.registrationStatus !== "rejected") {
+      return res.status(400).json({
+        success: false,
+        message: "Only rejected registrations can be re-submitted",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        _id: user._id,
+        username: user.username,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        middleName: user.middleName,
+        suffix: user.suffix,
+        dateOfBirth: user.dateOfBirth,
+        placeOfBirth: user.placeOfBirth,
+        gender: user.gender,
+        civilStatus: user.civilStatus,
+        salutation: user.salutation,
+        nationality: user.nationality,
+        phoneNumber: user.phoneNumber,
+        residentType: user.residentType,
+        address: user.address,
+        nonResidentAddress: user.nonResidentAddress,
+        precinctNumber: user.precinctNumber,
+        religion: user.religion,
+        heightWeight: user.heightWeight,
+        colorOfHairEyes: user.colorOfHairEyes,
+        occupation: user.occupation,
+        spouseInfo: user.spouseInfo,
+        sectoralGroups: user.sectoralGroups || [],
+        womensOrganization: user.womensOrganization,
+        primaryID1Type: user.primaryID1Type,
+        primaryID2Type: user.primaryID2Type,
+        rejectionReason: user.rejectionReason,
+        validIDUrl: user.validID?.url || null,
+        backOfValidIDUrl: user.backOfValidID?.url || null,
+        primaryID1Url: user.primaryID1?.url || user.validID?.url || null,
+        primaryID1BackUrl: user.primaryID1Back?.url || user.backOfValidID?.url || null,
+        primaryID2Url: user.primaryID2?.url || null,
+        primaryID2BackUrl: user.primaryID2Back?.url || null,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Error loading re-registration data",
+      error: error.message,
+    });
+  }
+};
+
+// @desc    Re-submit rejected resident registration
+// @route   PUT /api/auth/reregister/:userId
+// @access  Private
+exports.reregister = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const isSelf = String(req.user?._id) === String(userId);
+    const isPrivileged = hasRole(req.user, ROLES.SystemAdmin, ROLES.SuperAdmin, ROLES.Admin);
+
+    if (!isSelf && !isPrivileged) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to re-submit this registration",
+      });
+    }
+
+    const user = await User.findById(userId).select("+password");
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    if (user.registrationStatus !== "rejected") {
+      return res.status(400).json({
+        success: false,
+        message: "Only rejected registrations can be re-submitted",
+      });
+    }
+
+    const {
+      username,
+      email,
+      password,
+      residentType,
+      firstName,
+      lastName,
+      middleName,
+      suffix,
+      salutation,
+      dateOfBirth,
+      placeOfBirth,
+      gender,
+      civilStatus,
+      nationality,
+      phoneNumber,
+      tinNumber,
+      sssGsisNumber,
+      precinctNumber,
+      religion,
+      heightWeight,
+      colorOfHairEyes,
+      occupation,
+      sectoralGroups,
+      womensOrganization,
+      address,
+      nonResidentAddress,
+      spouseInfo,
+      emergencyContact,
+      birthCertificate,
+      primaryID1Type,
+      primaryID2Type,
+    } = req.body;
+
+    if (!username || !firstName || !lastName || !dateOfBirth || !gender || !phoneNumber || !residentType) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required registration fields",
+      });
+    }
+
+    const docValidation = validateDocumentCombination(primaryID1Type, primaryID2Type, residentType);
+    if (!docValidation.valid) {
+      return res.status(400).json({
+        success: false,
+        message: docValidation.message,
+      });
+    }
+
+    const normalizedEmail = email && email.trim() !== "" ? email.trim().toLowerCase() : null;
+    const duplicate = await User.findOne({
+      _id: { $ne: user._id },
+      $or: normalizedEmail
+        ? [{ username }, { email: normalizedEmail }]
+        : [{ username }],
+    }).select("_id email username");
+
+    if (duplicate) {
+      return res.status(400).json({
+        success: false,
+        message:
+          normalizedEmail && duplicate.email === normalizedEmail
+            ? "User already exists with this email"
+            : "User already exists with this username",
+      });
+    }
+
+    user.username = username;
+    user.email = normalizedEmail;
+    if (password && password.trim()) {
+      user.password = password;
+    }
+
+    user.firstName = firstName;
+    user.lastName = lastName;
+    user.middleName = middleName || null;
+    user.suffix = suffix || null;
+    user.salutation = salutation || user.salutation || "";
+    user.dateOfBirth = dateOfBirth;
+    user.placeOfBirth = placeOfBirth || null;
+    user.gender = gender;
+    user.civilStatus = civilStatus && civilStatus !== "N/A" ? civilStatus : "Single";
+    user.nationality = nationality || "Filipino";
+    user.phoneNumber = phoneNumber;
+    user.tinNumber = tinNumber || "N/A";
+    user.sssGsisNumber = sssGsisNumber || "N/A";
+    user.precinctNumber = precinctNumber || null;
+    user.religion = religion || null;
+    user.heightWeight = heightWeight || null;
+    user.colorOfHairEyes = colorOfHairEyes || null;
+    user.occupation = occupation || null;
+    user.sectoralGroups = sectoralGroups
+      ? (Array.isArray(sectoralGroups) ? sectoralGroups : parseJsonField(sectoralGroups, []))
+      : [];
+    user.womensOrganization = womensOrganization || null;
+
+    user.residentType = residentType;
+    if (residentType === "non_resident") {
+      user.nonResidentAddress = parseJsonField(nonResidentAddress, user.nonResidentAddress || {});
+      user.address = undefined;
+    } else {
+      const parsedAddress = parseJsonField(address, user.address || {});
+      user.address = {
+        ...parsedAddress,
+        district: parsedAddress?.district || "District 6",
+      };
+      user.nonResidentAddress = null;
+    }
+
+    user.spouseInfo = parseJsonField(spouseInfo, null);
+    user.emergencyContact = parseJsonField(emergencyContact, null);
+    user.birthCertificate = birthCertificate
+      ? parseJsonField(birthCertificate, user.birthCertificate || {})
+      : user.birthCertificate;
+    user.primaryID1Type = primaryID1Type || null;
+    user.primaryID2Type = primaryID2Type || null;
+
+    const getUploadedFile = (field) => (req.files && req.files[field] ? req.files[field][0] : null);
+    const mapUpload = (file, fallbackFolder, idType = null) => {
+      if (!file) return null;
+      const fileUrl = file.path && file.path.includes("cloudinary")
+        ? file.path
+        : (file.secure_url || `/uploads/${fallbackFolder}/${file.filename}`);
+
+      return {
+        url: fileUrl,
+        filename: file.filename || file.public_id,
+        originalName: file.originalname,
+        mimeType: file.mimetype,
+        fileSize: file.size,
+        uploadedAt: new Date(),
+        ...(idType ? { idType } : {}),
+      };
+    };
+
+    const validIDFile = getUploadedFile("validID") || getUploadedFile("primaryID1");
+    const validIDBackFile = getUploadedFile("backOfValidID") || getUploadedFile("primaryID1Back");
+    const primaryID2File = getUploadedFile("primaryID2");
+    const primaryID2BackFile = getUploadedFile("primaryID2Back");
+    const birthCertificateDocFile = getUploadedFile("birthCertificateDoc");
+
+    if (validIDFile) {
+      const mapped = mapUpload(validIDFile, "validIDs", primaryID1Type || "unknown");
+      user.validID = mapped;
+      user.primaryID1 = mapped;
+    }
+
+    if (validIDBackFile) {
+      const mappedBack = mapUpload(validIDBackFile, "validIDs");
+      user.backOfValidID = mappedBack;
+      user.primaryID1Back = mappedBack;
+    }
+
+    if (primaryID2File) {
+      user.primaryID2 = mapUpload(primaryID2File, "validIDs", primaryID2Type || "unknown");
+    }
+
+    if (primaryID2BackFile) {
+      user.primaryID2Back = mapUpload(primaryID2BackFile, "validIDs");
+    }
+
+    if (birthCertificateDocFile) {
+      const docUrl = birthCertificateDocFile.path && birthCertificateDocFile.path.includes("cloudinary")
+        ? birthCertificateDocFile.path
+        : `/uploads/birthCertificates/${birthCertificateDocFile.filename}`;
+
+      user.birthCertificate = {
+        ...(user.birthCertificate || {}),
+        documentUrl: docUrl,
+        documentFilename: birthCertificateDocFile.filename || birthCertificateDocFile.public_id,
+        documentUploadedAt: new Date(),
+      };
+    }
+
+    user.registrationStatus = "pending";
+    user.rejectionReason = null;
+    user.isActive = true;
+    user.approvedBy = null;
+    user.approvedAt = null;
+
+    await user.save();
+
+    await logAction(
+      LOGCONSTANTS.actions.user.UPDATE_USER,
+      `Re-submitted resident registration: ${user._id} (${user.email || user.username})`,
+      req.user
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Registration re-submitted successfully. Please wait for admin approval.",
+      data: {
+        _id: user._id,
+        username: user.username,
+        email: user.email,
+        registrationStatus: user.registrationStatus,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Error re-submitting registration",
       error: error.message,
     });
   }

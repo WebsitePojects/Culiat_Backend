@@ -11,7 +11,7 @@ const {
   exportDocumentHistory,
   exportDocumentPayments,
 } = require('../controllers/documentRequestController');
-const { protect } = require('../middleware/auth');
+const { protect, requireApprovedRegistration } = require('../middleware/auth');
 const staffOrAdmin = require('../middleware/staffOrAdmin');
 
 // Public route - get available templates
@@ -19,6 +19,7 @@ router.get('/templates', getTemplates);
 
 // Protected routes - require authentication
 router.use(protect);
+router.use(requireApprovedRegistration);
 
 // Get document status (any authenticated user)
 router.get('/status/:requestId', getDocumentStatus);

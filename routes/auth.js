@@ -21,6 +21,9 @@ const {
   checkUsernameAvailability,
   forgotPassword,
   resetPassword,
+  googleLogin,
+  getReregistrationPrefill,
+  reregister,
 } = require("../controllers/authController");
 const { protect, authorize } = require("../middleware/auth");
 const ROLES = require("../config/roles");
@@ -66,11 +69,25 @@ router.post(
   residentRegister
 );
 router.post("/login", rateLimiters.auth, login);  // Rate limiting for resident login
+router.post("/google-login", rateLimiters.auth, googleLogin);
 router.post("/admin-login", rateLimiters.adminAuth, login);  // Strict rate limiting (3 attempts) for admin login
 router.post("/forgotpassword", rateLimiters.passwordReset, forgotPassword);  // Rate limit password reset
 router.put("/resetpassword/:resetToken", rateLimiters.passwordReset, resetPassword);
 router.post("/adminRegister", protect, authorize(ROLES.SystemAdmin), rateLimiters.adminAuth, adminRegister);
 router.get("/me", protect, getMe);
+router.get(
+  "/reregister/:userId/prefill",
+  protect,
+  rateLimiters.general,
+  getReregistrationPrefill
+);
+router.put(
+  "/reregister/:userId",
+  protect,
+  rateLimiters.general,
+  handleMulterUpload,
+  reregister
+);
 router.put("/profile", protect, rateLimiters.general, updateProfile);
 router.put("/change-password", protect, rateLimiters.auth, changePassword);
 
@@ -134,20 +151,20 @@ router.put(
 router.get(
   "/pending-registrations",
   protect,
-  authorize(ROLES.SystemAdmin, ROLES.SuperAdmin),
+  authorize(ROLES.SystemAdmin, ROLES.SuperAdmin, ROLES.Admin),
   getPendingRegistrations
 );
 router.post(
   "/approve-registration/:userId",
   protect,
-  authorize(ROLES.SystemAdmin, ROLES.SuperAdmin),
+  authorize(ROLES.SystemAdmin, ROLES.SuperAdmin, ROLES.Admin),
   rateLimiters.general,
   approveRegistration
 );
 router.post(
   "/reject-registration/:userId",
   protect,
-  authorize(ROLES.SystemAdmin, ROLES.SuperAdmin),
+  authorize(ROLES.SystemAdmin, ROLES.SuperAdmin, ROLES.Admin),
   rateLimiters.general,
   rejectRegistration
 );

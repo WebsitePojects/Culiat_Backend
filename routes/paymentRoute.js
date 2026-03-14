@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const paymentController = require('../controllers/paymentController');
-const { protect, authorize } = require('../middleware/auth');
+const { protect, authorize, requireApprovedRegistration } = require('../middleware/auth');
 const ROLES = require('../config/roles');
 
 // Webhook endpoint (public - comes from PayMongo)
@@ -9,6 +9,7 @@ router.post('/webhook', paymentController.webhook);
 
 // Protected routes - require authentication
 router.use(protect);
+router.use(requireApprovedRegistration);
 
 // Get payment details for a request
 router.get('/details/:requestId', paymentController.getPaymentDetails);

@@ -617,6 +617,10 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    notificationReadKeys: {
+      type: [String],
+      default: [],
+    },
     approvedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

@@ -32,12 +32,13 @@ const createRateLimiter = (options = {}) => {
     windowMs = 15 * 60 * 1000, // 15 minutes default
     max = 100, // 100 requests per window default
     message = "Too many requests, please try again later.",
+    keyPrefix = "default",
     keyGenerator = (req) => req.ip || req.connection.remoteAddress,
     skipSuccessfulRequests = false,
   } = options;
 
   return (req, res, next) => {
-    const key = keyGenerator(req);
+    const key = `${keyPrefix}:${keyGenerator(req)}`;
     const now = Date.now();
     
     let record = rateLimitStore.get(key);
@@ -75,6 +76,7 @@ const rateLimiters = {
   general: createRateLimiter({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 3000, // 3000 requests per 15 minutes (allows ~3 req/sec for normal browsing)
+    keyPrefix: "general",
     message: "Too many requests from this IP, please try again after 15 minutes",
   }),
   
@@ -82,6 +84,7 @@ const rateLimiters = {
   auth: createRateLimiter({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 50, // 50 login attempts per 15 minutes for residents
+    keyPrefix: "auth",
     message: "Too many login attempts detected. Please wait 15 minutes before trying again. If you've forgotten your password, use the 'Forgot Password' link to reset it.",
     keyGenerator: (req) => `auth_${req.ip}_${req.body?.email || req.body?.username || 'unknown'}`,
   }),
@@ -90,6 +93,7 @@ const rateLimiters = {
   adminAuth: createRateLimiter({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 3, // Only 3 admin login attempts per 15 minutes
+    keyPrefix: "admin_auth",
     message: "Too many admin login attempts detected. For security purposes, admin logins are limited to 3 attempts per 15 minutes. Please wait before trying again. All attempts are being monitored and logged.",
     keyGenerator: (req) => `admin_auth_${req.ip}_${req.body?.email || req.body?.username || 'unknown'}`,
   }),
@@ -98,6 +102,7 @@ const rateLimiters = {
   registration: createRateLimiter({
     windowMs: 15 * 60 * 1000, // 15 minutes (reduced from 1 hour)
     max: 50, // 50 registration attempts per 15 minutes (increased from 10/hour)
+    keyPrefix: "registration",
     message: "Too many registration attempts, please try again later",
   }),
   
@@ -105,6 +110,7 @@ const rateLimiters = {
   passwordReset: createRateLimiter({
     windowMs: 60 * 60 * 1000, // 1 hour
     max: 5, // 5 password reset attempts per hour
+    keyPrefix: "password_reset",
     message: "Too many password reset attempts, please try again later",
   }),
   
@@ -112,6 +118,7 @@ const rateLimiters = {
   upload: createRateLimiter({
     windowMs: 60 * 60 * 1000, // 1 hour
     max: 50, // 50 uploads per hour
+    keyPrefix: "upload",
     message: "Too many file uploads, please try again later",
   }),
 };
