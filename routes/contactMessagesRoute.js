@@ -5,6 +5,7 @@ const {
   getAllContactMessages,
   getMessagesByStatus,
   getContactMessage,
+  getGuestMessage,
   updateStatus,
   updatePriority,
   assignMessage,
@@ -21,6 +22,7 @@ const ROLES = require('../config/roles');
 
 // Public routes
 router.post('/', submitContactMessage); // Can be used by logged in or anonymous users
+router.get('/guest/:id', getGuestMessage); // Guest can view their message + response
 
 // Admin routes
 router.get('/', protect, authorize(ROLES.SystemAdmin, ROLES.SuperAdmin, ROLES.Admin), getAllContactMessages);

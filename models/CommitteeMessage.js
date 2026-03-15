@@ -22,7 +22,6 @@ const committeeMessageSchema = new mongoose.Schema({
   },
   email: {
     type: String,
-    required: [true, 'Email is required'],
     trim: true,
     lowercase: true
   },
@@ -49,6 +48,12 @@ const committeeMessageSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
+  },
+  visitorId: {
+    type: String,
+    trim: true,
+    default: null,
+    index: true,
   },
   response: {
     message: String,

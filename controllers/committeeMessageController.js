@@ -1,5 +1,6 @@
 const CommitteeMessage = require('../models/CommitteeMessage');
 const Committee = require('../models/Committee');
+const GuestProfile = require('../models/GuestProfile');
 const Logs = require('../models/Logs');
 const { escapeRegex } = require('../utils/securityUtils');
 
@@ -8,7 +9,7 @@ const { escapeRegex } = require('../utils/securityUtils');
 // @access  Public
 exports.submitMessage = async (req, res) => {
   try {
-    const { committeeId, firstName, lastName, email, phoneNumber, subject, message } = req.body;
+    const { committeeId, firstName, lastName, email, phoneNumber, subject, message, visitorId } = req.body;
 
     // Validate committee existence
     const committee = await Committee.findById(committeeId);
@@ -29,9 +30,37 @@ exports.submitMessage = async (req, res) => {
       subject,
       message,
       userId: req.user ? req.user._id : null,
+      visitorId: visitorId || null,
       ipAddress: req.ip,
       userAgent: req.headers['user-agent']
     });
+
+    if (!req.user?._id) {
+      const normalizedEmail = email ? String(email).trim().toLowerCase() : null;
+      const guestSelector = visitorId ? { visitorId } : normalizedEmail ? { email: normalizedEmail } : null;
+
+      if (guestSelector) {
+        await GuestProfile.findOneAndUpdate(
+          guestSelector,
+          {
+            $set: {
+              firstName: firstName || null,
+              lastName: lastName || null,
+              email: normalizedEmail,
+              phoneNumber: phoneNumber || null,
+              ipAddress: req.ip,
+              userAgent: req.headers['user-agent'] || null,
+              lastSeenAt: new Date(),
+            },
+            $setOnInsert: {
+              visitorId: visitorId || null,
+              residentType: 'Unregistered',
+            },
+          },
+          { new: true, upsert: true }
+        );
+      }
+    }
 
     res.status(201).json({
       success: true,
@@ -264,6 +293,45 @@ exports.deleteMessage = async (req, res) => {
       success: false,
       message: 'Error deleting message',
       error: error.message
+    });
+  }
+};
+
+// @desc    Get message for guest (public - shows message + response only)
+// @route   GET /api/committee-messages/guest/:id
+// @access  Public
+exports.getGuestMessage = async (req, res) => {
+  try {
+    const message = await CommitteeMessage.findById(req.params.id);
+
+    if (!message) {
+      return res.status(404).json({
+        success: false,
+        message: 'Message not found',
+      });
+    }
+
+    // Return only the necessary fields for the guest
+    res.status(200).json({
+      success: true,
+      data: {
+        _id: message._id,
+        firstName: message.firstName,
+        lastName: message.lastName,
+        email: message.email,
+        message: message.message,
+        subject: message.subject,
+        committeeName: message.committeeName,
+        createdAt: message.createdAt,
+        response: message.response,
+        status: message.status,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching message',
+      error: error.message,
     });
   }
 };

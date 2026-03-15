@@ -4,6 +4,7 @@ const Report = require("../models/Report");
 const Announcement = require("../models/Announcement");
 const CommitteeMessage = require("../models/CommitteeMessage");
 const ContactMessage = require("../models/ContactMessage");
+const GuestProfile = require("../models/GuestProfile");
 
 const ADMIN_NOTIFICATION_KEY_PREFIX = "admin:";
 
@@ -321,6 +322,217 @@ const buildUserNotifications = async (userId, userEmail) => {
     }));
 
   return withReadState;
+};
+
+const buildGuestNotifications = async ({ visitorId, email, ipAddress }) => {
+  const normalizedEmail = email ? String(email).toLowerCase().trim() : null;
+
+  const guestProfile = await GuestProfile.findOne(
+    visitorId
+      ? { visitorId }
+      : normalizedEmail
+        ? { email: normalizedEmail }
+        : ipAddress
+          ? { ipAddress }
+          : { _id: null }
+  ).select("notificationReadKeys");
+
+  const notifications = [];
+
+  const committeeFilter = {
+    "response.respondedAt": { $ne: null },
+    isArchived: false,
+    $or: [
+      ...(visitorId ? [{ visitorId }] : []),
+      ...(normalizedEmail ? [{ email: normalizedEmail }] : []),
+    ],
+  };
+
+  const feedbackFilter = {
+    "response.respondedAt": { $ne: null },
+    isArchived: false,
+    $or: [
+      ...(visitorId ? [{ visitorId }] : []),
+      ...(normalizedEmail ? [{ email: normalizedEmail }] : []),
+    ],
+  };
+
+  const [committeeResponses, feedbackResponses] = await Promise.all([
+    committeeFilter.$or.length > 0
+      ? CommitteeMessage.find(committeeFilter)
+          .sort({ "response.respondedAt": -1 })
+          .limit(200)
+      : [],
+    feedbackFilter.$or.length > 0
+      ? ContactMessage.find(feedbackFilter)
+          .sort({ "response.respondedAt": -1 })
+          .limit(200)
+      : [],
+  ]);
+
+  committeeResponses.forEach((entry) => {
+    notifications.push({
+      id: `committee_${entry._id}`,
+      type: "committee_response",
+      title: "Committee Reply",
+      message: entry.response?.message || "An admin replied to your committee message.",
+      time: getTimeAgo(entry.response?.respondedAt || entry.updatedAt),
+      createdAt: entry.response?.respondedAt || entry.updatedAt,
+      link: "/committee",
+    });
+  });
+
+  feedbackResponses.forEach((entry) => {
+    notifications.push({
+      id: `feedback_${entry._id}`,
+      type: "feedback_response",
+      title: "Feedback Reply",
+      message: entry.response?.message || "An admin replied to your feedback.",
+      time: getTimeAgo(entry.response?.respondedAt || entry.updatedAt),
+      createdAt: entry.response?.respondedAt || entry.updatedAt,
+      link: "/",
+    });
+  });
+
+  const readKeySet = new Set(guestProfile?.notificationReadKeys || []);
+
+  return notifications
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .map((notification) => ({
+      ...notification,
+      unread: !readKeySet.has(notification.id),
+    }));
+};
+
+exports.getGuestNotifications = async (req, res) => {
+  try {
+    const { limit = 20, page = 1, type = "all", visitorId, email } = req.query;
+    const limitNum = Math.max(1, parseInt(limit, 10) || 20);
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const ipAddress = req.ip || req.connection?.remoteAddress || null;
+
+    if (!visitorId && !email) {
+      return res.status(400).json({
+        success: false,
+        message: "visitorId or email is required",
+      });
+    }
+
+    const notifications = await buildGuestNotifications({ visitorId, email, ipAddress });
+    const filteredNotifications = type && type !== "all"
+      ? notifications.filter((notification) => notification.type === type)
+      : notifications;
+
+    const total = filteredNotifications.length;
+    const totalPages = Math.max(1, Math.ceil(total / limitNum));
+    const safePage = Math.min(pageNum, totalPages);
+    const startIndex = (safePage - 1) * limitNum;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        notifications: filteredNotifications.slice(startIndex, startIndex + limitNum),
+        unreadCount: notifications.filter((n) => n.unread).length,
+        pagination: {
+          page: safePage,
+          limit: limitNum,
+          total,
+          totalPages,
+          hasPrevPage: safePage > 1,
+          hasNextPage: safePage < totalPages,
+        },
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error fetching guest notifications",
+      error: error.message,
+    });
+  }
+};
+
+exports.getGuestNotificationCounts = async (req, res) => {
+  try {
+    const { visitorId, email } = req.query;
+    const ipAddress = req.ip || req.connection?.remoteAddress || null;
+
+    if (!visitorId && !email) {
+      return res.status(400).json({
+        success: false,
+        message: "visitorId or email is required",
+      });
+    }
+
+    const notifications = await buildGuestNotifications({ visitorId, email, ipAddress });
+    const byType = (targetType) => notifications.filter((n) => n.type === targetType);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        registrationRejections: 0,
+        documentRejections: 0,
+        committeeResponses: byType("committee_response").length,
+        feedbackResponses: byType("feedback_response").length,
+        total: notifications.length,
+        unreadTotal: notifications.filter((n) => n.unread).length,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error fetching guest notification counts",
+      error: error.message,
+    });
+  }
+};
+
+exports.markGuestNotificationRead = async (req, res) => {
+  try {
+    const { notificationId, visitorId, email } = req.body;
+
+    if (!notificationId || typeof notificationId !== "string") {
+      return res.status(400).json({
+        success: false,
+        message: "notificationId is required",
+      });
+    }
+
+    if (!visitorId && !email) {
+      return res.status(400).json({
+        success: false,
+        message: "visitorId or email is required",
+      });
+    }
+
+    const normalizedEmail = email ? String(email).toLowerCase().trim() : null;
+    const filter = visitorId ? { visitorId } : { email: normalizedEmail };
+
+    await GuestProfile.findOneAndUpdate(
+      filter,
+      {
+        $setOnInsert: {
+          visitorId: visitorId || null,
+          email: normalizedEmail,
+          residentType: "Unregistered",
+          lastSeenAt: new Date(),
+        },
+        $addToSet: { notificationReadKeys: notificationId },
+      },
+      { new: true, upsert: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Guest notification marked as read",
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error marking guest notification as read",
+      error: error.message,
+    });
+  }
 };
 
 /**

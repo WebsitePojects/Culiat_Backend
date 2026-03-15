@@ -5,6 +5,7 @@ const {
   getMessages,
   getMessageStats,
   getMessage,
+  getGuestMessage,
   updateStatus,
   respondToMessage,
   deleteMessage
@@ -15,6 +16,7 @@ const { protect, authorize } = require('../middleware/auth');
 // Optional: Use protect middleware but make it optional if we want to allow guest messages
 // For now, let's keep it public but check for req.user in controller if available
 router.post('/', submitMessage);
+router.get('/guest/:id', getGuestMessage); // Guest can view their message + response
 
 // Protected routes (Admin only)
 router.use(protect);

@@ -1,7 +1,7 @@
 const DocumentRequest = require("../models/DocumentRequest");
 const User = require("../models/User");
 const Report = require("../models/Report");
-const TermsAcceptance = require("../models/TermsAcceptance");
+const GuestProfile = require("../models/GuestProfile");
 const { logAction } = require("../utils/logHelper");
 const { LOGCONSTANTS } = require("../config/logConstants");
 
@@ -582,7 +582,8 @@ exports.getSummary = async (req, res) => {
  */
 exports.getDashboardStats = async (req, res) => {
   try {
-    const { timeRange = "month", area = "all" } = req.query;
+    const { timeRange = "month", area = "all", compound = "all" } = req.query;
+    const trackedDocumentStatuses = ["pending", "approved", "rejected", "completed"];
     const now = new Date();
     let startDate;
     let prevPeriodStart;
@@ -610,12 +611,29 @@ exports.getDashboardStats = async (req, res) => {
         prevPeriodStart = new Date(startDate.getTime() - 30 * 24 * 60 * 60 * 1000);
     }
 
-    // Build query filter for area
-    const areaFilter = area !== "all" ? { "address.area": area } : {};
-    const residentFilter = { role: 74934, registrationStatus: "approved", ...areaFilter };
+    // Build query filter for location scope
+    const locationFilter = {};
+    if (area !== "all") {
+      locationFilter["address.area"] = area;
+    }
+    if (compound !== "all") {
+      locationFilter["address.compound"] = compound;
+    }
+
+    const residentFilter = { role: 74934, registrationStatus: "approved", ...locationFilter };
+    const allResidentRoleFilter = { role: 74934 };
 
     // === USER STATISTICS ===
+    const [registeredPortalUsers, unregisteredGuestUsers] = await Promise.all([
+      User.countDocuments(allResidentRoleFilter),
+      GuestProfile.countDocuments({}),
+    ]);
+    const totalUsers = registeredPortalUsers + unregisteredGuestUsers;
     const totalResidents = await User.countDocuments(residentFilter);
+    const totalNonResidents = await User.countDocuments({
+      ...allResidentRoleFilter,
+      residentType: "non_resident",
+    });
     const prevResidents = await User.countDocuments({
       ...residentFilter,
       createdAt: { $gte: prevPeriodStart, $lt: startDate }
@@ -632,59 +650,85 @@ exports.getDashboardStats = async (req, res) => {
     const pendingRegistrations = await User.countDocuments({
       role: 74934,
       registrationStatus: "pending",
-      ...areaFilter
+      ...locationFilter
     });
+
+    const pendingRegistrationRecords = await User.find({
+      role: 74934,
+      registrationStatus: "pending",
+      ...locationFilter,
+    })
+      .select("username firstName middleName lastName suffix gender civilStatus dateOfBirth address precinctNumber registrationStatus createdAt")
+      .sort({ createdAt: -1, lastName: 1, firstName: 1 })
+      .lean();
 
     // === DOCUMENT REQUEST STATISTICS ===
     const totalDocRequests = await DocumentRequest.countDocuments({
+      status: { $in: trackedDocumentStatuses },
+    });
+    const totalDocRequestsThisPeriod = await DocumentRequest.countDocuments({
+      status: { $in: trackedDocumentStatuses },
       createdAt: { $gte: startDate }
     });
     const prevDocRequests = await DocumentRequest.countDocuments({
+      status: { $in: trackedDocumentStatuses },
       createdAt: { $gte: prevPeriodStart, $lt: startDate }
     });
     const docRequestChange = prevDocRequests > 0
-      ? (((totalDocRequests - prevDocRequests) / prevDocRequests) * 100).toFixed(1)
-      : totalDocRequests > 0 ? 100 : 0;
+      ? (((totalDocRequestsThisPeriod - prevDocRequests) / prevDocRequests) * 100).toFixed(1)
+      : totalDocRequestsThisPeriod > 0 ? 100 : 0;
 
     const pendingRequests = await DocumentRequest.countDocuments({ status: "pending" });
     const approvedRequests = await DocumentRequest.countDocuments({ status: "approved" });
-    const completedRequests = await DocumentRequest.countDocuments({ 
-      status: "completed",
-      createdAt: { $gte: startDate }
-    });
+    const completedRequests = await DocumentRequest.countDocuments({ status: "completed" });
     const rejectedRequests = await DocumentRequest.countDocuments({ status: "rejected" });
+
+    const documentRequestRecords = await DocumentRequest.find({
+      status: { $in: trackedDocumentStatuses },
+    })
+      .select("firstName middleName lastName documentType status paymentStatus controlNumber createdAt")
+      .sort({ createdAt: -1 })
+      .lean();
 
     const completionRate = totalDocRequests > 0 
       ? ((completedRequests / totalDocRequests) * 100).toFixed(1) 
       : 0;
 
     // === REPORT STATISTICS ===
-    const totalReports = await Report.countDocuments({
+    const totalReportsThisPeriod = await Report.countDocuments({
       createdAt: { $gte: startDate }
     });
     const prevReports = await Report.countDocuments({
       createdAt: { $gte: prevPeriodStart, $lt: startDate }
     });
+    const totalReports = await Report.countDocuments({});
     const reportChange = prevReports > 0
-      ? (((totalReports - prevReports) / prevReports) * 100).toFixed(1)
-      : totalReports > 0 ? 100 : 0;
+      ? (((totalReportsThisPeriod - prevReports) / prevReports) * 100).toFixed(1)
+      : totalReportsThisPeriod > 0 ? 100 : 0;
 
     const pendingReports = await Report.countDocuments({ status: "pending" });
     const resolvedReports = await Report.countDocuments({ 
-      status: "resolved",
-      createdAt: { $gte: startDate }
+      status: { $regex: "^resolved$", $options: "i" },
     });
 
-    // === TERMS ACCEPTANCE STATISTICS ===
-    const totalTermsAccepted = await TermsAcceptance.countDocuments({
-      createdAt: { $gte: startDate }
-    });
+    const reportRecords = await Report.find({})
+      .populate("reportedBy", "username firstName lastName email")
+      .sort({ createdAt: -1 })
+      .select("title description category status priority location images reportVideo isAnonymous anonymousContact createdAt updatedAt reportedBy")
+      .lean();
 
     // === GET DISTINCT AREAS FOR DROPDOWN ===
     const areas = await User.distinct("address.area", { 
       role: 74934, 
       "address.area": { $ne: null, $ne: "" }
     });
+
+    const compoundFilter = {
+      role: 74934,
+      "address.compound": { $ne: null, $ne: "" },
+      ...(area !== "all" ? { "address.area": area } : {}),
+    };
+    const compounds = await User.distinct("address.compound", compoundFilter);
 
     // === RECENT ACTIVITY ===
     const recentDocRequests = await DocumentRequest.find()
@@ -703,7 +747,9 @@ exports.getDashboardStats = async (req, res) => {
       success: true,
       data: {
         overview: {
+          totalUsers,
           totalResidents,
+          totalNonResidents,
           residentChange: parseFloat(residentChange),
           newResidentsThisPeriod,
           pendingRegistrations,
@@ -718,9 +764,9 @@ exports.getDashboardStats = async (req, res) => {
           reportChange: parseFloat(reportChange),
           pendingReports,
           resolvedReports,
-          totalTermsAccepted,
         },
         areas: areas.filter(a => a).sort(),
+        compounds: compounds.filter(c => c).sort(),
         recentActivity: {
           documentRequests: recentDocRequests.map(req => ({
             id: req._id,
@@ -737,7 +783,29 @@ exports.getDashboardStats = async (req, res) => {
             date: rep.createdAt,
             reportedBy: rep.reportedBy ? `${rep.reportedBy.firstName} ${rep.reportedBy.lastName}` : "Unknown"
           }))
-        }
+        },
+        reportRecords: reportRecords.map((report) => ({
+          id: report._id,
+          title: report.title,
+          description: report.description,
+          category: report.category,
+          status: report.status,
+          priority: report.priority,
+          location: report.location || "Not specified",
+          images: report.images || [],
+          reportVideo: report.reportVideo || "",
+          isAnonymous: !!report.isAnonymous,
+          anonymousContact: report.anonymousContact || "",
+          accountName: report.reportedBy
+            ? `${report.reportedBy.firstName || ""} ${report.reportedBy.lastName || ""}`.replace(/\s+/g, " ").trim()
+            : "Anonymous",
+          accountUsername: report.reportedBy?.username || "",
+          accountEmail: report.reportedBy?.email || "",
+          createdAt: report.createdAt,
+          updatedAt: report.updatedAt,
+        })),
+        pendingRegistrationRecords,
+        documentRequestRecords,
       }
     });
   } catch (error) {
@@ -757,11 +825,17 @@ exports.getDashboardStats = async (req, res) => {
  */
 exports.getUserDemographics = async (req, res) => {
   try {
-    const { area = "all" } = req.query;
-    
-    // Build area filter
-    const areaFilter = area !== "all" ? { "address.area": area } : {};
-    const baseFilter = { role: 74934, registrationStatus: "approved", ...areaFilter };
+    const { area = "all", compound = "all" } = req.query;
+
+    const locationFilter = {};
+    if (area !== "all") {
+      locationFilter["address.area"] = area;
+    }
+    if (compound !== "all") {
+      locationFilter["address.compound"] = compound;
+    }
+
+    const baseFilter = { role: 74934, registrationStatus: "approved", ...locationFilter };
 
     // === GENDER DISTRIBUTION ===
     const genderStats = await User.aggregate([
@@ -838,13 +912,22 @@ exports.getUserDemographics = async (req, res) => {
 
     // === AREA/PUROK DISTRIBUTION ===
     const areaStats = await User.aggregate([
-      { $match: { role: 74934, registrationStatus: "approved" } },
+      { $match: baseFilter },
       { $group: { _id: "$address.area", count: { $sum: 1 } } },
       { $sort: { count: -1 } }
     ]);
     const areaDistribution = areaStats
       .filter(a => a._id)
       .map(a => ({ area: a._id, count: a.count }));
+
+    const compoundStats = await User.aggregate([
+      { $match: baseFilter },
+      { $group: { _id: "$address.compound", count: { $sum: 1 } } },
+      { $sort: { count: -1 } }
+    ]);
+    const compoundDistribution = compoundStats
+      .filter(c => c._id)
+      .map(c => ({ compound: c._id, count: c.count }));
 
     // === OCCUPATION STATISTICS ===
     const occupationStats = await User.aggregate([
@@ -886,7 +969,9 @@ exports.getUserDemographics = async (req, res) => {
     const registrationTrends = await User.aggregate([
       { 
         $match: { 
-          ...baseFilter, 
+          role: 74934,
+          ...locationFilter,
+          registrationStatus: { $in: ["pending", "approved", "rejected"] },
           createdAt: { $gte: sixMonthsAgo } 
         } 
       },
@@ -894,7 +979,8 @@ exports.getUserDemographics = async (req, res) => {
         $group: {
           _id: {
             year: { $year: "$createdAt" },
-            month: { $month: "$createdAt" }
+            month: { $month: "$createdAt" },
+            status: "$registrationStatus"
           },
           count: { $sum: 1 }
         }
@@ -903,11 +989,34 @@ exports.getUserDemographics = async (req, res) => {
     ]);
 
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const trendsData = registrationTrends.map(t => ({
-      month: months[t._id.month - 1],
-      year: t._id.year,
-      count: t.count
-    }));
+    const trendsMap = new Map();
+
+    registrationTrends.forEach((trend) => {
+      const key = `${trend._id.year}-${trend._id.month}`;
+      if (!trendsMap.has(key)) {
+        trendsMap.set(key, {
+          year: trend._id.year,
+          monthNumber: trend._id.month,
+          month: months[trend._id.month - 1],
+          approvedCount: 0,
+          pendingCount: 0,
+          rejectedCount: 0,
+          count: 0,
+        });
+      }
+
+      const entry = trendsMap.get(key);
+      const status = trend._id.status;
+      if (status === "approved") entry.approvedCount = trend.count;
+      if (status === "pending") entry.pendingCount = trend.count;
+      if (status === "rejected") entry.rejectedCount = trend.count;
+      entry.count = entry.approvedCount + entry.pendingCount + entry.rejectedCount;
+    });
+
+    const trendsData = Array.from(trendsMap.values()).sort((a, b) => {
+      if (a.year !== b.year) return a.year - b.year;
+      return a.monthNumber - b.monthNumber;
+    });
 
     // === SENIORS & PWD ESTIMATES (Age based) ===
     let seniorCitizens = 0;
@@ -924,6 +1033,11 @@ exports.getUserDemographics = async (req, res) => {
     // === SUMMARY TOTALS ===
     const totalUsers = await User.countDocuments(baseFilter);
 
+    const residentRecords = await User.find(baseFilter)
+      .select("username firstName middleName lastName suffix gender civilStatus dateOfBirth address precinctNumber registrationStatus createdAt")
+      .sort({ lastName: 1, firstName: 1 })
+      .lean();
+
     res.status(200).json({
       success: true,
       data: {
@@ -939,10 +1053,12 @@ exports.getUserDemographics = async (req, res) => {
         civilStatus: civilStatusDistribution,
         ageRanges,
         areaDistribution,
+        compoundDistribution,
         topOccupations,
         religionDistribution,
         nationalityDistribution,
-        registrationTrends: trendsData
+        registrationTrends: trendsData,
+        residentRecords,
       }
     });
   } catch (error) {

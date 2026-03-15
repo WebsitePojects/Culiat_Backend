@@ -148,6 +148,7 @@ exports.register = async (req, res) => {
       tinNumber,
       sssGsisNumber,
       precinctNumber,
+      isVoter,
       religion,
       heightWeight,
       colorOfHairEyes,
@@ -172,6 +173,9 @@ exports.register = async (req, res) => {
 
     const normalizedCivilStatus =
       civilStatus && civilStatus !== "N/A" ? civilStatus : "Single";
+    const normalizedIsVoter = residentType === "resident"
+      ? (isVoter === true || isVoter === "true" || isVoter === 1 || isVoter === "1")
+      : false;
 
     // Validate document combination based on resident type
     const docValidation = validateDocumentCombination(primaryID1Type, primaryID2Type, residentType);
@@ -395,7 +399,8 @@ exports.register = async (req, res) => {
       phoneNumber,
       tinNumber: tinNumber || "N/A",
       sssGsisNumber: sssGsisNumber || "N/A",
-      precinctNumber,
+      precinctNumber: normalizedIsVoter ? precinctNumber : null,
+      isVoter: normalizedIsVoter,
       religion,
       heightWeight,
       colorOfHairEyes,
@@ -413,10 +418,7 @@ exports.register = async (req, res) => {
                 ? JSON.parse(address)
                 : address
               : {};
-            return {
-              ...parsedAddress,
-              district: parsedAddress?.district || "District 6",
-            };
+            return enforceResidentDistrict(residentType, parsedAddress);
           })(),
       // Non-resident address
       nonResidentAddress: residentType === "non_resident"
@@ -1094,10 +1096,18 @@ exports.getPendingRegistrations = async (req, res) => {
       .select("-password")
       .sort({ createdAt: -1 });
 
+    const normalizedPendingUsers = pendingUsers.map((userDoc) => {
+      const user = userDoc.toObject ? userDoc.toObject() : userDoc;
+      if (user.residentType !== "non_resident") {
+        user.address = enforceResidentDistrict(user.residentType, user.address || {});
+      }
+      return user;
+    });
+
     res.status(200).json({
       success: true,
-      count: pendingUsers.length,
-      data: pendingUsers,
+      count: normalizedPendingUsers.length,
+      data: normalizedPendingUsers,
     });
   } catch (error) {
     res.status(500).json({
@@ -1378,6 +1388,7 @@ exports.reregister = async (req, res) => {
       tinNumber,
       sssGsisNumber,
       precinctNumber,
+      isVoter,
       religion,
       heightWeight,
       colorOfHairEyes,
@@ -1445,7 +1456,11 @@ exports.reregister = async (req, res) => {
     user.phoneNumber = phoneNumber;
     user.tinNumber = tinNumber || "N/A";
     user.sssGsisNumber = sssGsisNumber || "N/A";
-    user.precinctNumber = precinctNumber || null;
+    const normalizedIsVoter = residentType === "resident"
+      ? (isVoter === true || isVoter === "true" || isVoter === 1 || isVoter === "1")
+      : false;
+    user.isVoter = normalizedIsVoter;
+    user.precinctNumber = normalizedIsVoter ? (precinctNumber || null) : null;
     user.religion = religion || null;
     user.heightWeight = heightWeight || null;
     user.colorOfHairEyes = colorOfHairEyes || null;
@@ -1461,10 +1476,7 @@ exports.reregister = async (req, res) => {
       user.address = undefined;
     } else {
       const parsedAddress = parseJsonField(address, user.address || {});
-      user.address = {
-        ...parsedAddress,
-        district: parsedAddress?.district || "District 6",
-      };
+      user.address = enforceResidentDistrict(residentType, parsedAddress);
       user.nonResidentAddress = null;
     }
 

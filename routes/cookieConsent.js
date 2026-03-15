@@ -1,20 +1,116 @@
 const express = require('express');
 const router = express.Router();
 const CookieConsent = require('../models/CookieConsent');
+const { protect, authorize } = require('../middleware/auth');
+const ROLES = require('../config/roles');
+
+const normalizeIp = (rawIp) => {
+  if (!rawIp || typeof rawIp !== 'string') return null;
+
+  let value = rawIp.trim();
+  if (!value) return null;
+
+  if (value.startsWith('::ffff:')) {
+    value = value.replace('::ffff:', '');
+  }
+
+  if (value === '::1') {
+    value = '127.0.0.1';
+  }
+
+  if (/^\d+\.\d+\.\d+\.\d+:\d+$/.test(value)) {
+    value = value.split(':')[0];
+  }
+
+  return value;
+};
+
+const getClientIpMeta = (req) => {
+  const xForwardedFor = req.headers['x-forwarded-for'];
+  const orderedCandidates = [
+    {
+      source: 'x-forwarded-for',
+      ip: normalizeIp(Array.isArray(xForwardedFor) ? xForwardedFor[0] : xForwardedFor?.split(',')[0]),
+    },
+    { source: 'x-real-ip', ip: normalizeIp(req.headers['x-real-ip']) },
+    { source: 'cf-connecting-ip', ip: normalizeIp(req.headers['cf-connecting-ip']) },
+    { source: 'x-client-ip', ip: normalizeIp(req.headers['x-client-ip']) },
+    { source: 'req.ip', ip: normalizeIp(req.ip) },
+    { source: 'req.socket.remoteAddress', ip: normalizeIp(req.socket?.remoteAddress) },
+    { source: 'req.connection.remoteAddress', ip: normalizeIp(req.connection?.remoteAddress) },
+  ];
+
+  const firstResolved = orderedCandidates.find((entry) => Boolean(entry.ip));
+  const selected = firstResolved?.ip || null;
+  const source = firstResolved?.source || 'unresolved';
+  const candidates = orderedCandidates.map((entry) => entry.ip).filter(Boolean);
+
+  return {
+    ip: selected,
+    source,
+    candidates,
+  };
+};
+
+const isPrivateOrLocalIp = (ip) => {
+  if (!ip || typeof ip !== 'string') return true;
+  const value = ip.trim().toLowerCase();
+  if (!value) return true;
+
+  if (
+    value === '::1' ||
+    value === '127.0.0.1' ||
+    value.startsWith('127.') ||
+    value.startsWith('10.') ||
+    value.startsWith('192.168.') ||
+    value.startsWith('172.16.') ||
+    value.startsWith('172.17.') ||
+    value.startsWith('172.18.') ||
+    value.startsWith('172.19.') ||
+    value.startsWith('172.2') ||
+    value.startsWith('169.254.') ||
+    value.startsWith('fc') ||
+    value.startsWith('fd') ||
+    value.startsWith('fe80:')
+  ) {
+    return true;
+  }
+
+  return false;
+};
+
+const maskIp = (ip) => {
+  if (!ip || typeof ip !== 'string') return 'unknown';
+
+  const value = ip.trim();
+  if (!value) return 'unknown';
+
+  if (value.includes(':')) {
+    const parts = value.split(':').filter(Boolean);
+    if (parts.length <= 2) return 'xxxx:xxxx';
+    return `${parts[0]}:${parts[1]}:xxxx:xxxx`;
+  }
+
+  const octets = value.split('.');
+  if (octets.length !== 4) return 'xxx.xxx.xxx.xxx';
+  return `${octets[0]}.${octets[1]}.xxx.xxx`;
+};
 
 // Get user's IP address
 router.get('/get-ip', (req, res) => {
   try {
-    // Get IP from various possible headers (for proxies/load balancers)
-    const ip = req.headers['x-forwarded-for']?.split(',')[0] ||
-               req.headers['x-real-ip'] ||
-               req.connection.remoteAddress ||
-               req.socket.remoteAddress ||
-               req.ip;
+    const ipMeta = getClientIpMeta(req);
+
+    console.log('[CookieConsent][GET /get-ip] IP resolution', {
+      resolvedIp: maskIp(ipMeta.ip),
+      source: ipMeta.source,
+      reqIp: maskIp(req.ip),
+      hasForwardedForHeader: Boolean(req.headers['x-forwarded-for']),
+    });
 
     res.json({ 
       success: true,
-      ip: ip || 'unknown' 
+      ip: ipMeta.ip || 'unknown' 
     });
   } catch (error) {
     console.error('Error getting IP:', error);
@@ -30,8 +126,42 @@ router.get('/get-ip', (req, res) => {
 router.post('/cookie-consent', async (req, res) => {
   try {
     const { ip, accepted, userAgent, deviceFingerprint, referrer, currentUrl } = req.body;
+    const ipMeta = getClientIpMeta(req);
+    const bodyIp = normalizeIp(ip);
+    const reqIp = ipMeta.ip;
 
-    if (!ip || typeof accepted !== 'boolean' || !userAgent) {
+    const shouldUseRequestIp = reqIp && !isPrivateOrLocalIp(reqIp);
+    const shouldUseBodyIp = bodyIp && bodyIp !== 'unknown' && !isPrivateOrLocalIp(bodyIp);
+
+    const resolvedIp = shouldUseRequestIp
+      ? reqIp
+      : shouldUseBodyIp
+        ? bodyIp
+        : (reqIp || bodyIp || null);
+
+    const resolutionSource = shouldUseRequestIp
+      ? ipMeta.source
+      : shouldUseBodyIp
+        ? 'request-body-public-fallback'
+        : (reqIp ? ipMeta.source : bodyIp ? 'request-body' : 'unresolved');
+
+    console.log('[CookieConsent][POST /cookie-consent] Incoming consent payload', {
+      accepted,
+      bodyIp: maskIp(ip || ''),
+      normalizedBodyIp: maskIp(bodyIp || ''),
+      resolvedIp: maskIp(resolvedIp || ''),
+      resolutionSource,
+      reqIp: maskIp(req.ip),
+      hasForwardedForHeader: Boolean(req.headers['x-forwarded-for']),
+    });
+
+    if (!resolvedIp || typeof accepted !== 'boolean' || !userAgent) {
+      console.warn('[CookieConsent] Missing required fields for consent logging', {
+        hasResolvedIp: !!resolvedIp,
+        hasAcceptedBoolean: typeof accepted === 'boolean',
+        hasUserAgent: !!userAgent,
+      });
+
       return res.status(400).json({
         success: false,
         message: 'Missing required fields: ip, accepted, userAgent'
@@ -40,7 +170,7 @@ router.post('/cookie-consent', async (req, res) => {
 
     // Check if IP is blacklisted
     const existingBlacklist = await CookieConsent.findOne({ 
-      ip, 
+      ip: resolvedIp,
       isBlacklisted: true 
     });
 
@@ -54,7 +184,7 @@ router.post('/cookie-consent', async (req, res) => {
 
     // Create consent record with enhanced security data
     const consent = new CookieConsent({
-      ip,
+      ip: resolvedIp,
       accepted,
       userAgent,
       deviceFingerprint: deviceFingerprint || {},
@@ -83,8 +213,8 @@ router.post('/cookie-consent', async (req, res) => {
   }
 });
 
-// Get consent statistics (admin only - you can add auth middleware)
-router.get('/cookie-consent/stats', async (req, res) => {
+// Get consent statistics (admin only)
+router.get('/cookie-consent/stats', protect, authorize(ROLES.SystemAdmin, ROLES.SuperAdmin, ROLES.Admin), async (req, res) => {
   try {
     const totalConsents = await CookieConsent.countDocuments();
     const acceptedConsents = await CookieConsent.countDocuments({ accepted: true });
@@ -96,7 +226,7 @@ router.get('/cookie-consent/stats', async (req, res) => {
     const recentConsents = await CookieConsent.find()
       .sort({ timestamp: -1 })
       .limit(10)
-      .select('ip accepted timestamp userAgent deviceFingerprint.timezone isBlacklisted isSuspicious');
+      .select('ip accepted timestamp deviceFingerprint.timezone isBlacklisted isSuspicious');
 
     // Get unique IPs
     const uniqueIPs = await CookieConsent.distinct('ip');
@@ -112,7 +242,10 @@ router.get('/cookie-consent/stats', async (req, res) => {
         uniqueIPs: uniqueIPs.length,
         acceptanceRate: totalConsents > 0 ? ((acceptedConsents / totalConsents) * 100).toFixed(2) : 0
       },
-      recent: recentConsents
+      recent: recentConsents.map((entry) => ({
+        ...entry.toObject(),
+        ip: maskIp(entry.ip),
+      }))
     });
   } catch (error) {
     console.error('Error getting consent stats:', error);
@@ -124,8 +257,8 @@ router.get('/cookie-consent/stats', async (req, res) => {
   }
 });
 
-// Blacklist an IP address (admin only - add auth middleware)
-router.post('/cookie-consent/blacklist', async (req, res) => {
+// Blacklist an IP address (admin only)
+router.post('/cookie-consent/blacklist', protect, authorize(ROLES.SystemAdmin, ROLES.SuperAdmin, ROLES.Admin), async (req, res) => {
   try {
     const { ip, reason, adminId } = req.body;
 
@@ -166,8 +299,8 @@ router.post('/cookie-consent/blacklist', async (req, res) => {
   }
 });
 
-// Remove IP from blacklist (admin only - add auth middleware)
-router.post('/cookie-consent/whitelist', async (req, res) => {
+// Remove IP from blacklist (admin only)
+router.post('/cookie-consent/whitelist', protect, authorize(ROLES.SystemAdmin, ROLES.SuperAdmin, ROLES.Admin), async (req, res) => {
   try {
     const { ip } = req.body;
 
@@ -208,7 +341,7 @@ router.post('/cookie-consent/whitelist', async (req, res) => {
 });
 
 // Get blacklisted IPs (admin only)
-router.get('/cookie-consent/blacklist', async (req, res) => {
+router.get('/cookie-consent/blacklist', protect, authorize(ROLES.SystemAdmin, ROLES.SuperAdmin, ROLES.Admin), async (req, res) => {
   try {
     const blacklistedRecords = await CookieConsent.find({ isBlacklisted: true })
       .sort({ blacklistedAt: -1 })
@@ -241,8 +374,8 @@ router.get('/cookie-consent/blacklist', async (req, res) => {
   }
 });
 
-// Check if IP is blacklisted (public endpoint)
-router.get('/cookie-consent/check-ip/:ip', async (req, res) => {
+// Check if IP is blacklisted (admin only)
+router.get('/cookie-consent/check-ip/:ip', protect, authorize(ROLES.SystemAdmin, ROLES.SuperAdmin, ROLES.Admin), async (req, res) => {
   try {
     const { ip } = req.params;
 

@@ -1,21 +1,137 @@
 const ContactMessage = require('../models/ContactMessage');
+const GuestProfile = require('../models/GuestProfile');
 const { LOGCONSTANTS } = require('../config/logConstants');
 const { logAction } = require('../utils/logHelper');
 const { escapeRegex, sanitizeSortField } = require('../utils/securityUtils');
+const ROLES = require('../config/roles');
+const { hasRole } = require('../utils/roleAccess');
+
+const normalizeIp = (rawIp) => {
+  if (!rawIp || typeof rawIp !== 'string') return null;
+
+  let value = rawIp.trim();
+  if (!value) return null;
+
+  if (value.startsWith('::ffff:')) {
+    value = value.replace('::ffff:', '');
+  }
+
+  if (value === '::1') {
+    value = '127.0.0.1';
+  }
+
+  if (/^\d+\.\d+\.\d+\.\d+:\d+$/.test(value)) {
+    value = value.split(':')[0];
+  }
+
+  return value;
+};
+
+const extractClientIp = (req) => {
+  const xForwardedFor = req.headers['x-forwarded-for'];
+  const orderedCandidates = [
+    {
+      source: 'x-forwarded-for',
+      ip: normalizeIp(Array.isArray(xForwardedFor) ? xForwardedFor[0] : xForwardedFor?.split(',')[0]),
+    },
+    { source: 'x-real-ip', ip: normalizeIp(req.headers['x-real-ip']) },
+    { source: 'cf-connecting-ip', ip: normalizeIp(req.headers['cf-connecting-ip']) },
+    { source: 'x-client-ip', ip: normalizeIp(req.headers['x-client-ip']) },
+    { source: 'req.ip', ip: normalizeIp(req.ip) },
+    { source: 'req.socket.remoteAddress', ip: normalizeIp(req.socket?.remoteAddress) },
+    { source: 'req.connection.remoteAddress', ip: normalizeIp(req.connection?.remoteAddress) },
+  ];
+
+  const firstResolved = orderedCandidates.find((entry) => Boolean(entry.ip));
+
+  return {
+    ip: firstResolved?.ip || null,
+    source: firstResolved?.source || 'unresolved',
+    candidates: orderedCandidates.map((entry) => entry.ip).filter(Boolean),
+  };
+};
+
+const isPrivateOrLocalIp = (ip) => {
+  if (!ip || typeof ip !== 'string') return true;
+  const value = ip.trim().toLowerCase();
+  if (!value) return true;
+
+  if (
+    value === '::1' ||
+    value === '127.0.0.1' ||
+    value.startsWith('127.') ||
+    value.startsWith('10.') ||
+    value.startsWith('192.168.') ||
+    value.startsWith('172.16.') ||
+    value.startsWith('172.17.') ||
+    value.startsWith('172.18.') ||
+    value.startsWith('172.19.') ||
+    value.startsWith('172.2') ||
+    value.startsWith('169.254.') ||
+    value.startsWith('fc') ||
+    value.startsWith('fd') ||
+    value.startsWith('fe80:')
+  ) {
+    return true;
+  }
+
+  return false;
+};
+
+const maskIp = (ip) => {
+  if (!ip || typeof ip !== 'string') return 'unknown';
+  const value = ip.trim();
+  if (!value) return 'unknown';
+
+  if (value.includes(':')) {
+    const parts = value.split(':').filter(Boolean);
+    if (parts.length <= 2) return 'xxxx:xxxx';
+    return `${parts[0]}:${parts[1]}:xxxx:xxxx`;
+  }
+
+  const octets = value.split('.');
+  if (octets.length !== 4) return 'xxx.xxx.xxx.xxx';
+  return `${octets[0]}.${octets[1]}.xxx.xxx`;
+};
 
 // @desc    Submit a contact message (public or logged-in user)
 // @route   POST /api/contact-messages
 // @access  Public
 exports.submitContactMessage = async (req, res) => {
   try {
-    const { firstName, lastName, email, phoneNumber, subject, message, rating, category } = req.body;
+    const { firstName, lastName, email, phoneNumber, subject, message, rating, category, visitorId, clientPublicIp } = req.body;
 
     // Get user ID if logged in
     const userId = req.user?._id || null;
 
     // Get IP address for spam prevention
-    const ipAddress = req.ip || req.connection?.remoteAddress || null;
-    const userAgent = req.headers['user-agent'] || null;
+    const ipMeta = extractClientIp(req);
+    const normalizedClientPublicIp = normalizeIp(clientPublicIp);
+    const ipAddress = (ipMeta.ip && !isPrivateOrLocalIp(ipMeta.ip))
+      ? ipMeta.ip
+      : (normalizedClientPublicIp && !isPrivateOrLocalIp(normalizedClientPublicIp))
+        ? normalizedClientPublicIp
+        : ipMeta.ip;
+    const userAgent = (req.headers['user-agent'] || '').slice(0, 512) || null;
+
+    console.log('[ContactMessage] IP resolution for submitContactMessage', {
+      resolvedIp: maskIp(ipAddress || ''),
+      resolutionSource: (ipMeta.ip && !isPrivateOrLocalIp(ipMeta.ip))
+        ? ipMeta.source
+        : (normalizedClientPublicIp && !isPrivateOrLocalIp(normalizedClientPublicIp))
+          ? 'clientPublicIp'
+          : ipMeta.source,
+      clientPublicIp: maskIp(clientPublicIp || ''),
+      normalizedClientPublicIp: maskIp(normalizedClientPublicIp || ''),
+      reqIp: maskIp(req.ip || ''),
+      hasForwardedForHeader: Boolean(req.headers['x-forwarded-for']),
+      candidateIps: ipMeta.candidates.map((item) => maskIp(item || '')),
+      visitorId: visitorId || null,
+    });
+
+    if (!ipAddress) {
+      console.warn('[ContactMessage] IP could not be resolved for message submission');
+    }
 
     // Map subject to category if needed
     let mappedCategory = category;
@@ -38,14 +154,55 @@ exports.submitContactMessage = async (req, res) => {
       rating: rating || null,
       category: mappedCategory || 'general_inquiry',
       userId,
+      visitorId: visitorId || null,
       ipAddress,
       userAgent,
     });
 
+    let guestProfile = null;
+    if (!userId) {
+      const normalizedEmail = email ? String(email).trim().toLowerCase() : null;
+      const guestSelector = visitorId ? { visitorId } : normalizedEmail ? { email: normalizedEmail } : null;
+
+      if (guestSelector) {
+        guestProfile = await GuestProfile.findOneAndUpdate(
+          guestSelector,
+          {
+            $set: {
+              firstName: firstName || null,
+              lastName: lastName || null,
+              email: normalizedEmail,
+              phoneNumber: phoneNumber || null,
+              ipAddress,
+              userAgent,
+              lastSeenAt: new Date(),
+            },
+            $setOnInsert: {
+              visitorId: visitorId || null,
+              residentType: 'Unregistered',
+            },
+          },
+          { new: true, upsert: true }
+        );
+      }
+    }
+
     res.status(201).json({
       success: true,
       message: 'Your message has been submitted successfully. We will get back to you soon.',
-      data: { id: contactMessage._id },
+      data: {
+        id: contactMessage._id,
+        visitorId: visitorId || guestProfile?.visitorId || null,
+        guestProfile: guestProfile
+          ? {
+              firstName: guestProfile.firstName,
+              lastName: guestProfile.lastName,
+              email: guestProfile.email,
+              phoneNumber: guestProfile.phoneNumber,
+              residentType: guestProfile.residentType,
+            }
+          : null,
+      },
     });
   } catch (error) {
     console.error('Error submitting contact message:', error);
@@ -130,6 +287,8 @@ exports.getAllContactMessages = async (req, res) => {
     ]);
 
     // Transform data for frontend
+    const canViewRawIp = hasRole(req.user, ROLES.SystemAdmin, ROLES.SuperAdmin);
+
     const transformedMessages = messages.map(msg => ({
       _id: msg._id,
       name: msg.fullName,
@@ -143,8 +302,11 @@ exports.getAllContactMessages = async (req, res) => {
       status: msg.status,
       priority: msg.priority,
       isRegistered: !!msg.userId,
+      visitorId: msg.visitorId || null,
+      residentType: msg.userId ? 'Registered' : 'Unregistered',
       userId: msg.userId,
-      ipAddress: msg.ipAddress,
+      ipAddress: canViewRawIp ? (msg.ipAddress || null) : maskIp(msg.ipAddress || ''),
+      ipAddressMasked: maskIp(msg.ipAddress || ''),
       assignedTo: msg.assignedTo,
       response: msg.response,
       isSpam: msg.isSpam,
@@ -587,6 +749,45 @@ exports.deleteContactMessage = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete message',
+      error: error.message,
+    });
+  }
+};
+
+// @desc    Get message for guest (public - shows message + response only)
+// @route   GET /api/contact-messages/guest/:id
+// @access  Public
+exports.getGuestMessage = async (req, res) => {
+  try {
+    const message = await ContactMessage.findById(req.params.id);
+
+    if (!message) {
+      return res.status(404).json({
+        success: false,
+        message: 'Message not found',
+      });
+    }
+
+    // Return only the necessary fields for the guest
+    res.status(200).json({
+      success: true,
+      data: {
+        _id: message._id,
+        firstName: message.firstName,
+        lastName: message.lastName,
+        email: message.email,
+        message: message.message,
+        rating: message.rating,
+        subject: message.subject,
+        createdAt: message.createdAt,
+        response: message.response,
+        status: message.status,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching message',
       error: error.message,
     });
   }

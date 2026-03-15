@@ -6,13 +6,21 @@ const {
   getUserNotifications,
   getUserNotificationCounts,
   markUserNotificationRead,
+  getGuestNotifications,
+  getGuestNotificationCounts,
+  markGuestNotificationRead,
   markAdminNotificationRead,
   markAllAdminNotificationsRead,
 } = require("../controllers/notificationController");
 const { protect, authorize } = require("../middleware/auth");
 const ROLES = require("../config/roles");
 
-// All notification routes require authentication
+// Public guest notification routes
+router.get("/guest/recent", getGuestNotifications);
+router.get("/guest/counts", getGuestNotificationCounts);
+router.patch("/guest/read", markGuestNotificationRead);
+
+// Protected notification routes
 router.use(protect);
 
 // User-facing notification routes

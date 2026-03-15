@@ -15,10 +15,15 @@ const contactMessageSchema = new mongoose.Schema({
   },
   email: {
     type: String,
-    required: [true, 'Email is required'],
     lowercase: true,
     trim: true,
-    match: [/^\S+@\S+\.\S+$/, 'Please provide a valid email address'],
+    validate: {
+      validator: function(v) {
+        // Email is optional, but if provided, must be valid
+        return !v || /^\S+@\S+\.\S+$/.test(v);
+      },
+      message: 'Please provide a valid email address'
+    }
   },
   phoneNumber: {
     type: String,
@@ -75,6 +80,12 @@ const contactMessageSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     default: null,
+  },
+  visitorId: {
+    type: String,
+    trim: true,
+    default: null,
+    index: true,
   },
   
   // Admin Response

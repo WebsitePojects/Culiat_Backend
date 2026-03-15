@@ -237,6 +237,10 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
+    isVoter: {
+      type: Boolean,
+      default: false,
+    },
     religion: {
       type: String,
       trim: true,
