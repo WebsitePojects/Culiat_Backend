@@ -72,10 +72,10 @@ const createRateLimiter = (options = {}) => {
 
 // Pre-configured rate limiters
 const rateLimiters = {
-  // General API rate limiter - very permissive for normal usage
+  // General API rate limiter - permissive for development and normal usage
   general: createRateLimiter({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 3000, // 3000 requests per 15 minutes (allows ~3 req/sec for normal browsing)
+    max: 10000, // 10000 requests per 15 minutes (~11 req/sec) - allows heavy testing
     keyPrefix: "general",
     message: "Too many requests from this IP, please try again after 15 minutes",
   }),
@@ -89,12 +89,12 @@ const rateLimiters = {
     keyGenerator: (req) => `auth_${req.ip}_${req.body?.email || req.body?.username || 'unknown'}`,
   }),
   
-  // Strict rate limiter for admin authentication - prevents brute force
+  // Rate limiter for admin authentication - balanced between security and usability
   adminAuth: createRateLimiter({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 3, // Only 3 admin login attempts per 15 minutes
+    max: 20, // 20 admin login attempts per 15 minutes
     keyPrefix: "admin_auth",
-    message: "Too many admin login attempts detected. For security purposes, admin logins are limited to 3 attempts per 15 minutes. Please wait before trying again. All attempts are being monitored and logged.",
+    message: "Too many admin login attempts detected. Admin logins are limited to 20 attempts per 15 minutes. Please wait before trying again.",
     keyGenerator: (req) => `admin_auth_${req.ip}_${req.body?.email || req.body?.username || 'unknown'}`,
   }),
   

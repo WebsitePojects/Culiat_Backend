@@ -22,9 +22,23 @@ const logSchema = new mongoose.Schema({
     performedByRole: {
         type: String,
     },
+    ipAddress: {
+        type: String,
+        default: null,
+    },
+    userAgent: {
+        type: String,
+        default: null,
+    },
+    category: {
+        type: String,
+        default: null,
+        index: true,
+    },
     timestamp: {
         type: Date,
-        default: Date.now
+        default: Date.now,
+        index: true,
     }
 });
 

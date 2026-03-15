@@ -6,9 +6,28 @@ const LOGCONSTANTS = {
     user: {
       CREATE_USER: "CREATE USER",
       UPDATE_USER: "UPDATE USER",
+      DELETE_USER: "DELETE USER",
       LOGIN: "LOGIN",
       LOGOUT: "LOGOUT",
-      DELETE_USER: "DELETE USER",
+      ADMIN_LOGIN: "ADMIN LOGIN",
+      FAILED_LOGIN: "FAILED LOGIN",
+      APPROVE_REGISTRATION: "APPROVE REGISTRATION",
+      REJECT_REGISTRATION: "REJECT REGISTRATION",
+      REREGISTER: "REREGISTER",
+      BULK_UPDATE_USERS: "BULK UPDATE USERS",
+      BULK_DELETE_USERS: "BULK DELETE USERS",
+      DEACTIVATE_USER: "DEACTIVATE USER",
+      ACTIVATE_USER: "ACTIVATE USER",
+      CHANGE_PASSWORD: "CHANGE PASSWORD",
+      FORGOT_PASSWORD: "FORGOT PASSWORD",
+      RESET_PASSWORD: "RESET PASSWORD",
+    },
+    admin: {
+      MANAGE_USER: "MANAGE USER",
+      APPROVE_VERIFICATION: "APPROVE VERIFICATION",
+      REJECT_VERIFICATION: "REJECT VERIFICATION",
+      UPDATE_USER_STATUS: "UPDATE USER STATUS",
+      EXPORT_USERS: "EXPORT USERS",
     },
     achievements: {
       CREATE_ACHIEVEMENT: "CREATE ACHIEVEMENT",
@@ -20,16 +39,10 @@ const LOGCONSTANTS = {
       UPDATE_NEWS: "UPDATE NEWS",
       DELETE_NEWS: "DELETE NEWS",
     },
-    // officials: { Hardcoded in the frontend, temporarily removed from here
-    //   CREATE_OFFICIAL: 'CREATE OFFICIAL',
-    //   UPDATE_OFFICIAL: 'UPDATE OFFICIAL',
-    //   DELETE_OFFICIAL: 'DELETE OFFICIAL',
-    // },
     pageContents: {
       CREATE_PAGE_CONTENTS: "CREATE PAGE CONTENTS",
       UPDATE_PAGE_CONTENTS: "UPDATE PAGE CONTENTS",
     },
-
     announcements: {
       CREATE_ANNOUNCEMENT: "CREATE ANNOUNCEMENT",
       UPDATE_ANNOUNCEMENT: "UPDATE ANNOUNCEMENT",
@@ -37,7 +50,6 @@ const LOGCONSTANTS = {
       TOGGLE_PUBLISH_ANNOUNCEMENT: "TOGGLE PUBLISH ANNOUNCEMENT",
       ARCHIVE_ANNOUNCEMENT: "ARCHIVE ANNOUNCEMENT",
     },
-
     records: {
       CREATE_RECORD: "CREATE RECORD",
       UPDATE_RECORD: "UPDATE RECORD",
@@ -48,13 +60,7 @@ const LOGCONSTANTS = {
       DELETE_REPORT: "DELETE REPORT",
       ADD_COMMENTS: "ADD COMMENTS",
       UPDATE_REPORT_STATUS: "UPDATE REPORT STATUS",
-    },
-    admin: {
-      MANAGE_USER: "MANAGE USER",
-      APPROVE_VERIFICATION: "APPROVE VERIFICATION",
-      REJECT_VERIFICATION: "REJECT VERIFICATION",
-      UPDATE_USER_STATUS: "UPDATE USER STATUS",
-      DELETE_USER: "DELETE USER",
+      EXPORT_REPORTS: "EXPORT REPORTS",
     },
     officials: {
       CREATE_OFFICIAL: "CREATE OFFICIAL",
@@ -104,6 +110,32 @@ const LOGCONSTANTS = {
       TOGGLE_MESSAGE_ARCHIVE: "TOGGLE MESSAGE ARCHIVE",
       DELETE_CONTACT_MESSAGE: "DELETE CONTACT MESSAGE",
     },
+    documentRequests: {
+      CREATE_DOCUMENT_REQUEST: "CREATE DOCUMENT REQUEST",
+      UPDATE_DOCUMENT_REQUEST: "UPDATE DOCUMENT REQUEST",
+      APPROVE_DOCUMENT_REQUEST: "APPROVE DOCUMENT REQUEST",
+      REJECT_DOCUMENT_REQUEST: "REJECT DOCUMENT REQUEST",
+      COMPLETE_DOCUMENT_REQUEST: "COMPLETE DOCUMENT REQUEST",
+      DELETE_DOCUMENT_REQUEST: "DELETE DOCUMENT REQUEST",
+      EXPORT_DOCUMENT_REQUESTS: "EXPORT DOCUMENT REQUESTS",
+    },
+    profileVerification: {
+      SUBMIT_VERIFICATION: "SUBMIT VERIFICATION",
+      APPROVE_VERIFICATION: "APPROVE VERIFICATION",
+      REJECT_VERIFICATION: "REJECT VERIFICATION",
+      EXPORT_VERIFICATIONS: "EXPORT VERIFICATIONS",
+    },
+    profileUpdate: {
+      SUBMIT_PROFILE_UPDATE: "SUBMIT PROFILE UPDATE",
+      APPROVE_PROFILE_UPDATE: "APPROVE PROFILE UPDATE",
+      REJECT_PROFILE_UPDATE: "REJECT PROFILE UPDATE",
+    },
+    payments: {
+      CREATE_PAYMENT: "CREATE PAYMENT",
+      UPDATE_PAYMENT: "UPDATE PAYMENT",
+      DELETE_PAYMENT: "DELETE PAYMENT",
+      EXPORT_PAYMENTS: "EXPORT PAYMENTS",
+    },
     settings: {
       UPDATE_SETTINGS: "UPDATE SETTINGS",
       UPDATE_SYSTEM_SETTINGS: "UPDATE SYSTEM SETTINGS",
@@ -115,6 +147,52 @@ const LOGCONSTANTS = {
       RESET_SETTINGS: "RESET SETTINGS",
       TOGGLE_MAINTENANCE_MODE: "TOGGLE MAINTENANCE MODE",
     },
+    activityLogs: {
+      EXPORT_ACTIVITY_LOGS: "EXPORT ACTIVITY LOGS",
+      DELETE_LOG: "DELETE LOG",
+    },
+    committees: {
+      CREATE_COMMITTEE: "CREATE COMMITTEE",
+      UPDATE_COMMITTEE: "UPDATE COMMITTEE",
+      DELETE_COMMITTEE: "DELETE COMMITTEE",
+    },
+    notifications: {
+      CREATE_NOTIFICATION: "CREATE NOTIFICATION",
+      UPDATE_NOTIFICATION: "UPDATE NOTIFICATION",
+      DELETE_NOTIFICATION: "DELETE NOTIFICATION",
+      MARK_READ: "MARK NOTIFICATION READ",
+    },
+    analytics: {
+      VIEW_ANALYTICS: "VIEW ANALYTICS",
+      EXPORT_ANALYTICS: "EXPORT ANALYTICS",
+    },
+  },
+
+  // Category mapping for frontend filtering
+  categories: {
+    user: "users",
+    admin: "users",
+    achievements: "content",
+    news: "content",
+    pageContents: "content",
+    announcements: "content",
+    records: "content",
+    reports: "reports",
+    officials: "content",
+    barangayInfo: "content",
+    services: "content",
+    faqs: "content",
+    banners: "content",
+    contactMessages: "feedback",
+    documentRequests: "documents",
+    profileVerification: "users",
+    profileUpdate: "users",
+    payments: "documents",
+    settings: "system",
+    activityLogs: "system",
+    committees: "content",
+    notifications: "system",
+    analytics: "system",
   },
 };
 

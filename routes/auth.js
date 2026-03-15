@@ -3,6 +3,7 @@ const router = express.Router();
 const {
   register,
   login,
+  logout,
   getMe,
   updateProfile,
   changePassword,
@@ -70,7 +71,8 @@ router.post(
 );
 router.post("/login", rateLimiters.auth, login);  // Rate limiting for resident login
 router.post("/google-login", rateLimiters.auth, googleLogin);
-router.post("/admin-login", rateLimiters.adminAuth, login);  // Strict rate limiting (3 attempts) for admin login
+router.post("/admin-login", rateLimiters.adminAuth, login);  // Rate limited for admin login
+router.post("/logout", protect, logout);  // Log logout action (token cleared client-side)
 router.post("/forgotpassword", rateLimiters.passwordReset, forgotPassword);  // Rate limit password reset
 router.put("/resetpassword/:resetToken", rateLimiters.passwordReset, resetPassword);
 router.post("/adminRegister", protect, authorize(ROLES.SystemAdmin), rateLimiters.adminAuth, adminRegister);

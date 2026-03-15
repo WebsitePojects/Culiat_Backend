@@ -29,10 +29,11 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: false, // Optional for elderly users without email
       unique: true,
-      sparse: true, // Allow multiple null values for unique index
+      sparse: true, // Sparse index skips documents where field is absent (undefined)
       lowercase: true,
       trim: true,
-      default: null,
+      // No default — omit the field entirely when not provided so sparse index skips it
+      set: (v) => (v && v.trim() !== '' ? v.trim().toLowerCase() : undefined),
     },
     password: {
       type: String,

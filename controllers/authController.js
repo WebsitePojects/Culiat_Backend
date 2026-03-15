@@ -383,9 +383,10 @@ exports.register = async (req, res) => {
 
     // Create user with all fields
     // Note: normalizedEmail was already defined above when checking for existing user
+    // Use undefined (not null) for missing email so the sparse unique index skips the field entirely
     const user = await User.create({
       username,
-      email: normalizedEmail, // Optional - for elderly without email
+      ...(normalizedEmail ? { email: normalizedEmail } : {}), // Optional - for elderly without email
       password,
       firstName,
       lastName,
@@ -479,8 +480,9 @@ exports.register = async (req, res) => {
     // Create audit log for account creation
     await logAction(
       LOGCONSTANTS.actions.user.CREATE_USER,
-      `New resident registration: ${user._id} (${user.email}) - Pending approval`,
-      user
+      `New resident registration: ${user.username} (${user.email || 'no email'}) - Pending approval`,
+      user,
+      req
     );
   } catch (error) {
     console.error('❌ Registration Error:', error.message);
@@ -501,9 +503,10 @@ exports.register = async (req, res) => {
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern)[0];
       console.error('🔑 Duplicate Key Error:', field);
+      const fieldLabel = field === 'email' ? 'email address' : field === 'username' ? 'username' : field;
       return res.status(400).json({
         success: false,
-        message: `A user with this ${field} already exists`,
+        message: `A user with this ${fieldLabel} already exists`,
       });
     }
     
@@ -612,15 +615,15 @@ exports.login = async (req, res) => {
       const limit = typeof rateLimitLimit === 'number' ? rateLimitLimit : parseInt(rateLimitLimit);
       const remaining = typeof rateLimitRemaining === 'number' ? rateLimitRemaining : parseInt(rateLimitRemaining);
       
-      if (limit === 3 && !isNaN(remaining)) {
-        console.log('⚠️ Admin login failed, remaining attempts:', remaining);
-        
-        if (remaining === 2) {
-          message = "Invalid credentials. You have 2 attempts remaining before your account is temporarily locked.";
-        } else if (remaining === 1) {
-          message = "Invalid credentials. WARNING: You have only 1 attempt remaining before your account is temporarily locked for 15 minutes.";
+      if (!isNaN(remaining) && remaining <= 5) {
+        console.log('⚠️ Login failed, remaining attempts:', remaining);
+
+        if (remaining === 5) {
+          message = `Invalid credentials. You have ${remaining} attempts remaining.`;
+        } else if (remaining <= 3 && remaining > 0) {
+          message = `Invalid credentials. WARNING: Only ${remaining} attempt(s) remaining before temporary lockout.`;
         } else if (remaining === 0) {
-          message = "Invalid credentials. This was your last attempt. Your account will be temporarily locked.";
+          message = "Invalid credentials. You have been temporarily locked out. Please try again after 15 minutes.";
         }
       }
       
@@ -644,6 +647,15 @@ exports.login = async (req, res) => {
 
     // Generate token
     const token = generateToken(user._id);
+
+    // Log the login action (admin vs resident)
+    const isAdminLogin = (req.originalUrl || "").includes("/admin-login");
+    await logAction(
+      isAdminLogin ? LOGCONSTANTS.actions.user.ADMIN_LOGIN : LOGCONSTANTS.actions.user.LOGIN,
+      `${isAdminLogin ? 'Admin' : 'User'} logged in: ${user.username} (${getRoleName(user.role)})`,
+      user,
+      req
+    );
 
     res.status(200).json({
       success: true,
@@ -994,10 +1006,11 @@ exports.adminRegister = async (req, res) => {
     const performer = req.user || user;
     await logAction(
       LOGCONSTANTS.actions.user.CREATE_USER,
-      `Admin registration: ${user._id} (${user.email}) by ${
-        req.user?._id || "system"
+      `Admin registration: ${user.username} (${user.email || 'no email'}) by ${
+        req.user?.username || "system"
       }`,
-      performer
+      performer,
+      req
     );
   } catch (error) {
     res.status(500).json({
@@ -1072,8 +1085,9 @@ exports.residentRegister = async (req, res) => {
     // Create audit log
     await logAction(
       LOGCONSTANTS.actions.user.CREATE_USER,
-      `Resident registration pending: ${user._id} (${user.email})`,
-      user
+      `Resident registration pending: ${user.username} (${user.email || 'no email'})`,
+      user,
+      req
     );
   } catch (error) {
     res.status(500).json({
@@ -1172,8 +1186,9 @@ exports.approveRegistration = async (req, res) => {
     // Create audit log
     await logAction(
       LOGCONSTANTS.actions.user.UPDATE_USER,
-      `Approved resident registration: ${user._id} (${user.email || user.username})`,
-      req.user
+      `Approved resident registration: ${user.username} (${user.email || 'no email'})`,
+      req.user,
+      req
     );
   } catch (error) {
     res.status(500).json({
@@ -1247,8 +1262,9 @@ exports.rejectRegistration = async (req, res) => {
     // Create audit log
     await logAction(
       LOGCONSTANTS.actions.user.UPDATE_USER,
-      `Rejected resident registration: ${user._id} (${user.email || user.username}) - Reason: ${reason}`,
-      req.user
+      `Rejected resident registration: ${user.username} (${user.email || 'no email'}) - Reason: ${reason}`,
+      req.user,
+      req
     );
   } catch (error) {
     res.status(500).json({
@@ -1438,7 +1454,12 @@ exports.reregister = async (req, res) => {
     }
 
     user.username = username;
-    user.email = normalizedEmail;
+    // Use undefined (not null) for missing email so the sparse unique index skips the field
+    if (normalizedEmail) {
+      user.email = normalizedEmail;
+    } else {
+      user.email = undefined;
+    }
     if (password && password.trim()) {
       user.password = password;
     }
@@ -1555,8 +1576,9 @@ exports.reregister = async (req, res) => {
 
     await logAction(
       LOGCONSTANTS.actions.user.UPDATE_USER,
-      `Re-submitted resident registration: ${user._id} (${user.email || user.username})`,
-      req.user
+      `Re-submitted resident registration: ${user.username} (${user.email || 'no email'})`,
+      req.user,
+      req
     );
 
     return res.status(200).json({
@@ -1586,9 +1608,20 @@ exports.getAllUsers = async (req, res) => {
     const { role, status } = req.query;
     const filter = {};
 
-    // Filter by role if specified
+    // Hide SystemAdmin accounts from non-SystemAdmin users
+    if (!hasRole(req.user, ROLES.SystemAdmin)) {
+      filter.role = { $ne: ROLES.SystemAdmin };
+    }
+
+    // Filter by role if specified (merge with above if needed)
     if (role) {
-      filter.role = role;
+      if (filter.role && typeof filter.role === 'object') {
+        // Already has $ne constraint — add $eq on top using $and
+        filter.$and = [{ role: filter.role }, { role: Number(role) }];
+        delete filter.role;
+      } else {
+        filter.role = Number(role);
+      }
     }
 
     // Filter by registration status if specified
@@ -1727,9 +1760,9 @@ exports.createUser = async (req, res) => {
     // Log the action
     await logAction(
       LOGCONSTANTS.actions.user.CREATE_USER,
-      req.user._id,
-      `Admin created new user: ${firstName} ${lastName} (${getUserRoleNames(user).join(", ")})`,
-      { targetUserId: user._id, roles: getUserRoleNames(user) }
+      `Admin created new user: ${user.username} - ${firstName} ${lastName} (${getUserRoleNames(user).join(", ")})`,
+      req.user,
+      req
     );
 
     res.status(201).json({
@@ -1814,6 +1847,13 @@ exports.updateUserById = async (req, res) => {
         });
       }
 
+      if (!hasRole(req.user, ROLES.SystemAdmin) && requestedRoles.includes(ROLES.SuperAdmin)) {
+        return res.status(403).json({
+          success: false,
+          message: "Only System Admin can assign Super Admin role",
+        });
+      }
+
       user.roles = requestedRoles;
       user.role = getPrimaryRole(requestedRoles);
     }
@@ -1823,10 +1863,10 @@ exports.updateUserById = async (req, res) => {
 
     // Log the action
     await logAction(
-      LOGCONSTANTS.actions.user.DELETE_USER,
-      req.user._id,
-      `Admin updated user: ${user.firstName} ${user.lastName}`,
-      { targetUserId: user._id }
+      LOGCONSTANTS.actions.user.UPDATE_USER,
+      `Admin updated user: ${user.username} - ${user.firstName} ${user.lastName}`,
+      req.user,
+      req
     );
 
     res.status(200).json({
@@ -1894,9 +1934,9 @@ exports.deleteUserById = async (req, res) => {
     // Log the action
     await logAction(
       LOGCONSTANTS.actions.user.DELETE_USER,
-      req.user._id,
-      `Admin deleted user: ${userName} (${userRole})`,
-      { targetUserId: userId }
+      `Admin deleted user: ${user.username} - ${userName} (${userRole})`,
+      req.user,
+      req
     );
 
     res.status(200).json({
@@ -1951,6 +1991,13 @@ exports.bulkUpdateUsers = async (req, res) => {
       });
     }
 
+    if (shouldUpdateRoles && !hasRole(req.user, ROLES.SystemAdmin) && requestedRoles.includes(ROLES.SuperAdmin)) {
+      return res.status(403).json({
+        success: false,
+        message: "Only System Admin can assign Super Admin role",
+      });
+    }
+
     const targetUsers = await User.find({ _id: { $in: userIds } });
 
     if (!targetUsers.length) {
@@ -1976,10 +2023,10 @@ exports.bulkUpdateUsers = async (req, res) => {
     }
 
     await logAction(
-      LOGCONSTANTS.actions.user.UPDATE_USER,
-      req.user._id,
-      `Bulk updated ${targetUsers.length} users`,
-      { targetUserIds: userIds }
+      LOGCONSTANTS.actions.user.BULK_UPDATE_USERS,
+      `Bulk updated ${targetUsers.length} user(s): ${targetUsers.map(u => u.username).join(', ')}`,
+      req.user,
+      req
     );
 
     res.status(200).json({
@@ -2043,10 +2090,10 @@ exports.bulkDeleteUsers = async (req, res) => {
     await User.deleteMany({ _id: { $in: targetUsers.map((user) => user._id) } });
 
     await logAction(
-      LOGCONSTANTS.actions.user.DELETE_USER,
-      req.user._id,
-      `Bulk deleted ${targetUsers.length} users`,
-      { targetUserIds: targetUsers.map((user) => user._id) }
+      LOGCONSTANTS.actions.user.BULK_DELETE_USERS,
+      `Bulk deleted ${targetUsers.length} user(s): ${targetUsers.map(u => u.username).join(', ')}`,
+      req.user,
+      req
     );
 
     res.status(200).json({
@@ -2211,6 +2258,23 @@ exports.resetPassword = async (req, res) => {
       data: "Password Reset Success",
       token: generateToken(user._id),
     });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Logout and log the action
+// @route   POST /api/auth/logout
+// @access  Private
+exports.logout = async (req, res) => {
+  try {
+    await logAction(
+      LOGCONSTANTS.actions.user.LOGOUT,
+      `User logged out: ${req.user.username} (${getRoleName(req.user.role)})`,
+      req.user,
+      req
+    );
+    res.status(200).json({ success: true, message: "Logged out successfully" });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
