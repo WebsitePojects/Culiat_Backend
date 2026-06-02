@@ -2,6 +2,7 @@ const Achievement = require('../models/Achievement');
 const fs = require('fs');
 const path = require('path');
 const { deleteFromCloudinary, getPublicIdFromUrl } = require('../config/cloudinary');
+const { sanitizeRichText } = require('../utils/richTextSanitizer');
 
 // Check if using Cloudinary
 const isCloudinaryEnabled = () => {
@@ -124,7 +125,7 @@ exports.createAchievement = async (req, res) => {
     const achievement = await Achievement.create({
       title,
       category,
-      description,
+      description: sanitizeRichText(description),
       date,
       image,
       images,
@@ -162,7 +163,7 @@ exports.updateAchievement = async (req, res) => {
     const fieldsToUpdate = {
       title: req.body.title,
       category: req.body.category,
-      description: req.body.description,
+      description: req.body.description !== undefined ? sanitizeRichText(req.body.description) : achievement.description,
       date: req.body.date,
       committeeRef: req.body.committeeRef || null,
     };
