@@ -3,6 +3,7 @@ const { LOGCONSTANTS } = require('../config/logConstants');
 const { getRoleName, getUserDisplayNameWithWebsiteAdminTag } = require('../utils/roleHelpers');
 const { logAction } = require('../utils/logHelper');
 const { deleteFromCloudinary, getPublicIdFromUrl } = require('../config/cloudinary');
+const { sanitizeRichText } = require('../utils/richTextSanitizer');
 
 const addPublisherDisplayName = (announcement) => {
   const obj = announcement?.toObject ? announcement.toObject() : announcement;
@@ -76,7 +77,7 @@ exports.createAnnouncement = async (req, res) => {
 
     const announcement = await Announcement.create({
       title,
-      content,
+      content: sanitizeRichText(content),
       category: category || 'General',
       priority,
       publishDate,
@@ -324,7 +325,7 @@ exports.updateAnnouncement = async (req, res) => {
     // Build update object
     const updateData = {
       title: title || announcement.title,
-      content: content || announcement.content,
+      content: content !== undefined ? sanitizeRichText(content) : announcement.content,
       category: category || announcement.category,
       priority: priority || announcement.priority,
       location: location || announcement.location,
